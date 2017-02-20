@@ -102,6 +102,7 @@ impl EnttecDmxPort {
         Ok(port)
     }
 
+    /// Write the current parameters out to the port.
     pub fn write_params(&mut self) -> Result<(), Error> {
         self.port.write_all(&self.params.as_packet())?;
         Ok(())
