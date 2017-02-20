@@ -15,9 +15,8 @@ const MIN_UNIVERSE_SIZE: usize = 24;
 const MAX_UNIVERSE_SIZE: usize = 512;
 
 // Port action flags.
-const GET_PARAMETERS: u8 = 3;
 const SET_PARAMETERS: u8 = 4;
-const RECEIVE_DMX_PACKET: u8 = 5;
+//const RECEIVE_DMX_PACKET: u8 = 5;
 const SEND_DMX_PACKET: u8 = 6;
 
 /// Format a byte buffer as an enttec message.
@@ -65,6 +64,17 @@ impl EnttecParams {
     }
 }
 
+/// Trait for the general notion of a DMX port.
+/// This enables creation of an "offline" port to slot into place if an API requires an output.
+pub trait DmxPort {
+    /// Write a DMX frame out to the port.  If the frame is smaller than the minimum universe size,
+    /// it will be padded with zeros.  If the frame is larger than the maximum universe size, the
+    /// values beyond the max size will be ignored.
+    fn write(&mut self, frame: &[u8]) -> Result<(), Error>;
+
+    fn port_name(&self) -> &str;
+}
+
 pub struct EnttecDmxPort {
     params: EnttecParams,
     port: SystemPort,
@@ -81,20 +91,25 @@ impl EnttecDmxPort {
 
         let params = EnttecParams::default();
 
-        // send the default parameters to the port
-        port.write_all(&params.as_packet())?;
-
-        Ok(EnttecDmxPort {
+        let mut port = EnttecDmxPort {
             params: params,
             port: port,
             port_name: port_name,
-        })
+        };
+
+        // send the default parameters to the port
+        port.write_params()?;
+        Ok(port)
     }
 
-    /// Write a DMX frame out to the port.  If the frame is smaller than the minimum universe size,
-    /// it will be padded with zeros.  If the frame is larger than the maximum universe size, the
-    /// values beyond the max size will be ignored.
-    pub fn write(&mut self, frame: &[u8]) -> Result<(), Error> {
+    pub fn write_params(&mut self) -> Result<(), Error> {
+        self.port.write_all(&self.params.as_packet())?;
+        Ok(())
+    }
+}
+
+impl DmxPort for EnttecDmxPort {
+    fn write(&mut self, frame: &[u8]) -> Result<(), Error> {
         let packet = {
             let size = frame.len();
             if size < MIN_UNIVERSE_SIZE {
@@ -109,5 +124,20 @@ impl EnttecDmxPort {
         };
         self.port.write_all(&packet)?;
         Ok(())
+    }
+
+    fn port_name(&self) -> &str {
+        &self.port_name
+    }
+}
+
+pub struct OfflineDmxPort {}
+
+impl DmxPort for OfflineDmxPort {
+    fn write(&mut self, _: &[u8]) -> Result<(), Error> {
+        Ok(())
+    }
+    fn port_name(&self) -> &str {
+        "offline"
     }
 }
