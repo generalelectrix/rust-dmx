@@ -1,14 +1,11 @@
-extern crate native;
-extern crate libc;
+use io::file::File;
 
-use native::io::file::FileDesc;
-
-use self::libc::types::os::arch::c95::{c_int,c_char};
-
+use std::os::raw::{c_int,c_char};
+use std::os::unix::io::FromRawFd;
 
 #[link(name = "ioctrl")]
 extern {
-	fn open_port_file(path: *c_char) -> c_int;
+	fn open_port_file(path: *const c_char) -> c_int;
 	fn ioctrl_tiocexcl(fd: c_int) ->  c_int;
 	fn tcgetattr(fildes: c_int, termios_p: *mut TermiosPtr) -> c_int;
 	fn new_termios() -> *mut TermiosPtr;
@@ -60,12 +57,12 @@ impl Drop for Termios {
 // "safe" interface to C functions
 
 // open a port file using the C interface
-pub fn open_file(path: &str) -> Option<FileDesc> {
+pub fn open_file(path: &str) -> Option<File> {
 
 	let fd = unsafe {open_port_file(path.to_c_str().unwrap()) };
 
 	if fd >= 0 {
-		Some(FileDesc::new(fd, true))
+		Some(File::from_raw_fd(fd))
 	}
 	else {
 		None

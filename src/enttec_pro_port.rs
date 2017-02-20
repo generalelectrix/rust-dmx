@@ -1,7 +1,7 @@
 //! Functions for creating a port and sending data with it.  Opening and closing
 //! are handled automatically by Rust.  Port will close upon deconstruction.
 
-use native::io::file::FileDesc;
+use io::file::FileDesc;
 use rustrt::rtio::IoError;
 use rustrt::rtio::RtioFileStream;
 
@@ -179,7 +179,7 @@ impl EnttecProOutPort {
         // this is all implemented in this method:
         options.set_as_enttec();
 
-        debug!("Setting IO options.")
+        debug!("Setting IO options.");
 
 		match set_port_options(&self.file, &options) {
 			true => {},
@@ -271,7 +271,7 @@ impl EnttecProOutPort {
 	/// Set the break time in 10.67 us units, range 9-127.
     pub fn set_break_time(&mut self, time: u8) {
     	if time < 9 || time > 127 {
-    		debug!("Invalid break time: {:u} * 10.67 us.", time);
+    		debug!("Invalid break time: {} * 10.67 us.", time);
     	}
     	else {
     		self.settingsDirty = true;
@@ -283,7 +283,7 @@ impl EnttecProOutPort {
 	/// Set the mark after break time in 10.67 us units, range 1-127.
     pub fn set_mark_after_break_time(&mut self, time: u8) {
     	if time < 1 || time > 127 {
-    		debug!("Invalid MAB time: {:u} * 10.67 us.", time);
+    		debug!("Invalid MAB time: {} * 10.67 us.", time);
     	}
     	else {
     		self.settingsDirty = true;
@@ -295,7 +295,7 @@ impl EnttecProOutPort {
 	/// 0 is special. It means "Go as fast as you can."
     pub fn set_refresh_rate(&mut self, rate: u8) {
     	if rate > 40 {
-    		debug!("Invalid DMX refresh rate: {:u} fps", rate);
+    		debug!("Invalid DMX refresh rate: {} fps", rate);
     	}
     	else {
     		self.settings.refreshRate = rate;
