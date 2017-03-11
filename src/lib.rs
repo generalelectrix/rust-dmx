@@ -1,6 +1,6 @@
 extern crate serial;
 
-use serial::Error;
+pub use serial::Error;
 
 mod enttec;
 
