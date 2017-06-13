@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use serial::prelude::*;
 use serial::{SystemPort, open, Error};
+use ::{DmxPort, SerializablePort};
 
 
 // Some constants used for enttec message framing.
@@ -66,26 +67,18 @@ impl EnttecParams {
     }
 }
 
-/// Trait for the general notion of a DMX port.
-/// This enables creation of an "offline" port to slot into place if an API requires an output.
-pub trait DmxPort {
-    /// Write a DMX frame out to the port.  If the frame is smaller than the minimum universe size,
-    /// it will be padded with zeros.  If the frame is larger than the maximum universe size, the
-    /// values beyond the max size will be ignored.
-    fn write(&mut self, frame: &[u8]) -> Result<(), Error>;
-
-    fn port_name(&self) -> &str;
-}
-
 pub struct EnttecDmxPort {
     params: EnttecParams,
     port: SystemPort,
     port_name: String,
 }
 
+pub const ENTTEC_NAMESPACE: &'static str = "enttec";
+
 impl EnttecDmxPort {
     /// Open a enttec port with the specified port name.
-    pub fn new(port_name: String) -> Result<EnttecDmxPort, Error> {
+    pub fn new<N: Into<String>>(port_name: N) -> Result<EnttecDmxPort, Error> {
+        let port_name = port_name.into();
         let mut port = open(&port_name)?;
 
         // use a short 1 ms timeout to avoid blocking if, say, the port disappears
@@ -132,6 +125,10 @@ impl DmxPort for EnttecDmxPort {
 
     fn port_name(&self) -> &str {
         &self.port_name
+    }
+
+    fn serializable(&self) -> SerializablePort {
+        SerializablePort::new(ENTTEC_NAMESPACE, self.port_name())
     }
 }
 

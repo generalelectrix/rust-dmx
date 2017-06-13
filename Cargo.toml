@@ -5,3 +5,5 @@ authors = ["general electrix <general.electrix@gmail.com>"]
 
 [dependencies]
 serial = "*"
+serde = "*"
+serde_derive = "*"
