@@ -1,5 +1,9 @@
 extern crate serial;
 #[macro_use] extern crate serde_derive;
+extern crate serde;
+
+use serde::ser::{Serializer, Serialize};
+use serde::de::{self, Deserializer, Deserialize};
 
 pub use serial::Error;
 
@@ -68,4 +72,18 @@ impl SerializablePort {
             _ => offline()
         }
     }
+}
+
+// Helper functions to use when serializing and deserializing DmxPort trait objects contained in
+// other structs, using Serde attributes.
+fn serialize<S>(port: &DmxPort, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer
+{
+    port.serializable().serialize(serializer)
+}
+
+fn deserialize<'de, D>(deserializer: D) -> Result<Box<DmxPort>, D::Error>
+    where D: Deserializer<'de>
+{
+    SerializablePort::deserialize(deserializer).map(SerializablePort::reopen)
 }
