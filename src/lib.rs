@@ -75,14 +75,14 @@ impl SerializablePort {
 }
 
 // Helper functions to use when serializing and deserializing DmxPort trait objects contained in
-// other structs, using Serde attributes.
-fn serialize<S>(port: &DmxPort, serializer: S) -> Result<S::Ok, S::Error>
+// other structs.  This can be done using the serde with attribute.
+pub fn serialize<S>(port: &DmxPort, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer
 {
     port.serializable().serialize(serializer)
 }
 
-fn deserialize<'de, D>(deserializer: D) -> Result<Box<DmxPort>, D::Error>
+pub fn deserialize<'de, D>(deserializer: D) -> Result<Box<DmxPort>, D::Error>
     where D: Deserializer<'de>
 {
     SerializablePort::deserialize(deserializer).map(SerializablePort::reopen)
