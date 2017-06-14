@@ -4,8 +4,8 @@ extern crate serde;
 
 use serde::ser::{Serializer, Serialize};
 use serde::de::{self, Deserializer, Deserialize};
-
-pub use serial::Error;
+use serial::Error as SerialError;
+use std::fmt;
 
 mod enttec;
 
@@ -86,4 +86,50 @@ pub fn deserialize<'de, D>(deserializer: D) -> Result<Box<DmxPort>, D::Error>
     where D: Deserializer<'de>
 {
     SerializablePort::deserialize(deserializer).map(SerializablePort::reopen)
+}
+
+#[derive(Debug)]
+pub enum Error {
+    Serial(SerialError),
+    IO(std::io::Error),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use Error::*;
+        match *self {
+            Serial(ref e) => e.fmt(f),
+            IO(ref e) => e.fmt(f),
+        }
+    }
+}
+
+impl From<SerialError> for Error {
+    fn from(e: SerialError) -> Self {
+        Error::Serial(e)
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error::IO(e)
+    }
+}
+
+impl std::error::Error for Error {
+    fn description(&self) -> &str {
+        use Error::*;
+        match *self {
+            Serial(ref e) => e.description(),
+            IO(ref e) => e.description(),
+        }
+    }
+
+    fn cause(&self) -> Option<&std::error::Error> {
+        use Error::*;
+        match *self {
+            Serial(ref e) => Some(e),
+            IO(ref e) => Some(e),
+        }
+    }
 }

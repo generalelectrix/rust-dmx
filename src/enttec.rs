@@ -5,8 +5,8 @@ use std::cmp::min;
 use std::time::Duration;
 
 use serial::prelude::*;
-use serial::{SystemPort, open, Error};
-use ::{DmxPort, SerializablePort};
+use serial::{SystemPort, open};
+use ::{DmxPort, SerializablePort, Error};
 
 
 // Some constants used for enttec message framing.
