@@ -62,7 +62,7 @@ impl<'a> SerializablePort<'a> {
         fn offline() -> Box<DmxPort> {
             Box::new(OfflineDmxPort{})
         }
-        match self.namespace.as_ref() {
+        match self.namespace {
             OFFLINE_NAMESPACE => offline(),
             ENTTEC_NAMESPACE =>
                 match EnttecDmxPort::new(self.id) {
