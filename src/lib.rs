@@ -44,7 +44,7 @@ impl DmxPort for OfflineDmxPort {
     }
 }
 
-#[derive(PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 /// A serializable data structure for persisting a record of a port to disk, also providing
 /// for attempted reopening of a port.
 pub struct SerializablePort<'a> {
