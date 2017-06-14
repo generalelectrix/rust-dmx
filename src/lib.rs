@@ -22,7 +22,7 @@ pub trait DmxPort {
     /// Return the name of this port.  Should only be used for display purposes.
     fn port_name(&self) -> &str;
 
-    /// Return a tuple of (namespace, port_identifier) to be used to try to reopen a port
+    /// Return a SerializablePort to be used to try to reopen a port
     /// after deserialization of a saved show or after application restart.
     fn serializable(&self) -> SerializablePort;
 }
@@ -47,14 +47,14 @@ impl DmxPort for OfflineDmxPort {
 #[derive(Serialize, Deserialize)]
 /// A serializable data structure for persisting a record of a port to disk, also providing
 /// for attempted reopening of a port.
-pub struct SerializablePort {
-    namespace: String,
-    id: String,
+pub struct SerializablePort<'a> {
+    namespace: &'a str,
+    id: &'a str,
 }
 
-impl SerializablePort {
-    fn new<N: Into<String>, I: Into<String>>(namespace: N, id: I) -> Self {
-        SerializablePort { namespace: namespace.into(), id: id.into() }
+impl<'a> SerializablePort<'a> {
+    fn new(namespace: &'a str, id: &'a str) -> Self {
+        SerializablePort { namespace: namespace, id: id }
     }
     /// Based on the namespace and id, try to reopen this DMX port.
     /// If we don't know the namespace or the port isn't available, return an offline port.
