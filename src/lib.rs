@@ -6,6 +6,7 @@ use serde::ser::{Serializer, Serialize};
 use serde::de::{self, Deserializer, Deserialize};
 use serial::Error as SerialError;
 use std::fmt;
+use std::error::Error as StdError;
 
 mod enttec;
 
@@ -94,6 +95,20 @@ pub enum Error {
     IO(std::io::Error),
 }
 
+/// We're ok with a loose equality comparison here.  Just delegate to description for now.
+impl PartialEq for Error {
+    fn eq(&self, other: &Self) -> bool {
+        use Error::*;
+        match (self, other) {
+            (&Serial(ref e0), &Serial(ref e1)) => e0.description() == e1.description(),
+            (&IO(ref e0), &IO(ref e1)) => e0.description() == e1.description(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Error {}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Error::*;
@@ -116,7 +131,7 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl std::error::Error for Error {
+impl StdError for Error {
     fn description(&self) -> &str {
         use Error::*;
         match *self {
@@ -125,7 +140,7 @@ impl std::error::Error for Error {
         }
     }
 
-    fn cause(&self) -> Option<&std::error::Error> {
+    fn cause(&self) -> Option<&StdError> {
         use Error::*;
         match *self {
             Serial(ref e) => Some(e),
