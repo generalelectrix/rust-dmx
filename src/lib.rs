@@ -20,6 +20,9 @@ pub trait DmxPort: fmt::Debug {
     /// values beyond the max size will be ignored.
     fn write(&mut self, frame: &[u8]) -> Result<(), Error>;
 
+    /// Return the namespace this port lives in.
+    fn namespace(&self) -> &str;
+
     /// Return the name of this port.  Should only be used for display purposes.
     fn port_name(&self) -> &str;
 
@@ -52,6 +55,9 @@ const OFFLINE_ID: &'static str = "offline";
 impl DmxPort for OfflineDmxPort {
     fn write(&mut self, _: &[u8]) -> Result<(), Error> {
         Ok(())
+    }
+    fn namespace(&self) -> &str {
+        OFFLINE_NAMESPACE
     }
     fn port_name(&self) -> &str {
         OFFLINE_ID

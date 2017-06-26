@@ -130,6 +130,10 @@ impl DmxPort for EnttecDmxPort {
         Ok(())
     }
 
+    fn namespace(&self) -> &str {
+        ENTTEC_NAMESPACE
+    }
+
     fn port_name(&self) -> &str {
         &self.port_name
     }
