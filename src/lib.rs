@@ -3,7 +3,7 @@ extern crate serial;
 extern crate serde;
 
 use serde::ser::{Serializer, Serialize};
-use serde::de::{self, Deserializer, Deserialize};
+use serde::de::{Deserializer, Deserialize};
 use serial::Error as SerialError;
 use std::fmt;
 use std::error::Error as StdError;
@@ -14,7 +14,7 @@ pub use enttec::{available_enttec_ports, EnttecDmxPort, ENTTEC_NAMESPACE};
 
 /// Trait for the general notion of a DMX port.
 /// This enables creation of an "offline" port to slot into place if an API requires an output.
-pub trait DmxPort {
+pub trait DmxPort: fmt::Debug {
     /// Write a DMX frame out to the port.  If the frame is smaller than the minimum universe size,
     /// it will be padded with zeros.  If the frame is larger than the maximum universe size, the
     /// values beyond the max size will be ignored.
@@ -29,6 +29,12 @@ pub trait DmxPort {
 }
 
 pub struct OfflineDmxPort {}
+
+impl fmt::Debug for OfflineDmxPort {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.serializable().fmt(f)
+    }
+}
 
 const OFFLINE_NAMESPACE: &'static str = "offline";
 const OFFLINE_ID: &'static str = "offline";

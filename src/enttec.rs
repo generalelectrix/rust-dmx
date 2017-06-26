@@ -3,6 +3,7 @@ use std::{fs, path};
 use std::io::Write;
 use std::cmp::min;
 use std::time::Duration;
+use std::fmt;
 
 use serial::prelude::*;
 use serial::{SystemPort, open};
@@ -101,6 +102,12 @@ impl EnttecDmxPort {
     pub fn write_params(&mut self) -> Result<(), Error> {
         self.port.write_all(&self.params.as_packet())?;
         Ok(())
+    }
+}
+
+impl fmt::Debug for EnttecDmxPort {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.serializable().fmt(f)
     }
 }
 
