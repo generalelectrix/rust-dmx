@@ -10,7 +10,7 @@ use std::error::Error as StdError;
 
 mod enttec;
 
-pub use enttec::{available_enttec_ports, EnttecDmxPort, ENTTEC_NAMESPACE};
+pub use enttec::{EnttecDmxPort, ENTTEC_NAMESPACE, EnttecPortProvider};
 
 /// Trait for the general notion of a DMX port.
 /// This enables creation of an "offline" port to slot into place if an API requires an output.
@@ -28,7 +28,17 @@ pub trait DmxPort: fmt::Debug {
     fn serializable(&self) -> SerializablePort;
 }
 
-pub struct OfflineDmxPort {}
+/// A source of DmxPorts based on unique string identifiers.
+pub trait DmxPortProvider {
+    /// Return a unique namespace for this port provider.
+    fn namespace(&self) -> &str;
+    /// Return a description of the available ports provided by this provider.
+    fn available_ports(&self) -> Vec<String>;
+    /// Attempt to open this port, and return it behind the trait object or an error.
+    fn open<N: Into<String>>(&self, port: N) -> Result<Box<DmxPort>, Error>; 
+}
+
+pub struct OfflineDmxPort;
 
 impl fmt::Debug for OfflineDmxPort {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -51,6 +61,23 @@ impl DmxPort for OfflineDmxPort {
     }
 }
 
+pub struct OfflinePortProvider;
+
+impl DmxPortProvider for OfflinePortProvider {
+    /// Return a unique namespace for this port provider.
+    fn namespace(&self) -> &str {
+        OFFLINE_NAMESPACE
+    }
+    /// Return a description of the available ports provided by this provider.
+    fn available_ports(&self) -> Vec<String> {
+        vec!(OFFLINE_ID.to_string())
+    }
+    /// Attempt to open this port, and return it behind the trait object or an error.
+    fn open<N: Into<String>>(&self, _: N) -> Result<Box<DmxPort>, Error> {
+        Ok(Box::new(OfflineDmxPort))
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 /// A serializable data structure for persisting a record of a port to disk, also providing
 /// for attempted reopening of a port.
@@ -63,21 +90,20 @@ impl<'a> SerializablePort<'a> {
     fn new(namespace: &'a str, id: &'a str) -> Self {
         SerializablePort { namespace: namespace, id: id }
     }
+
+    /// Try to open the port described by this serialized form.
+    fn open(&self) -> Result<Box<DmxPort>, Error> {
+        match self.namespace {
+            OFFLINE_NAMESPACE => Ok(Box::new(OfflineDmxPort{})),
+            ENTTEC_NAMESPACE => Ok(Box::new(EnttecDmxPort::new(self.id)?)),
+            _ => Err(Error::InvalidNamespace(self.namespace.to_string())),
+        }
+    }
+
     /// Based on the namespace and id, try to reopen this DMX port.
     /// If we don't know the namespace or the port isn't available, return an offline port.
     fn reopen(self) -> Box<DmxPort> {
-        fn offline() -> Box<DmxPort> {
-            Box::new(OfflineDmxPort{})
-        }
-        match self.namespace {
-            OFFLINE_NAMESPACE => offline(),
-            ENTTEC_NAMESPACE =>
-                match EnttecDmxPort::new(self.id) {
-                    Ok(port) => Box::new(port),
-                    Err(_) => offline()
-                },
-            _ => offline()
-        }
+        self.open().unwrap_or(Box::new(OfflineDmxPort{}))
     }
 }
 
@@ -99,6 +125,7 @@ pub fn deserialize<'de, D>(deserializer: D) -> Result<Box<DmxPort>, D::Error>
 pub enum Error {
     Serial(SerialError),
     IO(std::io::Error),
+    InvalidNamespace(String),
 }
 
 /// We're ok with a loose equality comparison here.  Just delegate to description for now.
@@ -108,6 +135,7 @@ impl PartialEq for Error {
         match (self, other) {
             (&Serial(ref e0), &Serial(ref e1)) => e0.description() == e1.description(),
             (&IO(ref e0), &IO(ref e1)) => e0.description() == e1.description(),
+            (&InvalidNamespace(ref n0), &InvalidNamespace(ref n1)) => n0 == n1,
             _ => false,
         }
     }
@@ -121,6 +149,7 @@ impl fmt::Display for Error {
         match *self {
             Serial(ref e) => e.fmt(f),
             IO(ref e) => e.fmt(f),
+            InvalidNamespace(ref n) => write!(f, "Invalid DMX port namesapce: '{}'.", n),
         }
     }
 }
@@ -143,6 +172,7 @@ impl StdError for Error {
         match *self {
             Serial(ref e) => e.description(),
             IO(ref e) => e.description(),
+            InvalidNamespace(_) => "Invalid DMX port namespace.",
         }
     }
 
@@ -151,6 +181,7 @@ impl StdError for Error {
         match *self {
             Serial(ref e) => Some(e),
             IO(ref e) => Some(e),
+            InvalidNamespace(_) => None,
         }
     }
 }

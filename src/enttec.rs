@@ -7,7 +7,7 @@ use std::fmt;
 
 use serial::prelude::*;
 use serial::{SystemPort, open};
-use ::{DmxPort, SerializablePort, Error};
+use super::{DmxPort, DmxPortProvider, SerializablePort, Error};
 
 
 // Some constants used for enttec message framing.
@@ -139,15 +139,28 @@ impl DmxPort for EnttecDmxPort {
     }
 }
 
-/// List available enttec ports.
-/// This function assumes MacOS.
-pub fn available_enttec_ports() -> Vec<path::PathBuf> {
-    match fs::read_dir("/dev/") {
-        Err(_) => Vec::new(),
-        Ok(dirs) => {
-            dirs.filter_map(|x| x.ok().map(|p| p.path()))
-                .filter(|p| p.starts_with("tty.usbserial"))
-                .collect()
+pub struct EnttecPortProvider;
+
+impl DmxPortProvider for EnttecPortProvider {
+    /// Return a unique namespace for this port provider.
+    fn namespace(&self) -> &str {
+        ENTTEC_NAMESPACE
+    }
+    /// Return the available enttec ports connected to this system.
+    /// TODO: provide a mechanism to specialize this implementation depending on platform.
+    fn available_ports(&self) -> Vec<String> {
+        match fs::read_dir("/dev/") {
+            Err(_) => Vec::new(),
+            Ok(dirs) => {
+                dirs.filter_map(|x| x.ok().map(|p| p.path()))
+                    .filter(|p| p.starts_with("tty.usbserial"))
+                    .filter_map(|p| p.to_str().map(|s| s.to_string()))
+                    .collect()
+            }
         }
+    }
+    /// Attempt to open this port, and return it behind the trait object or an error.
+    fn open<N: Into<String>>(&self, port: N) -> Result<Box<DmxPort>, Error> {
+        EnttecDmxPort::new(port).map(|p| Box::new(p) as Box<DmxPort>)
     }
 }
