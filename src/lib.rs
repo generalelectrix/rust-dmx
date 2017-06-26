@@ -78,6 +78,16 @@ impl DmxPortProvider for OfflinePortProvider {
     }
 }
 
+/// Gather up all of the providers behind their namespace.
+/// This is your one-stop-shop for port creation.
+pub fn open_port<N: Into<String>>(namespace: &str, port_name: N) -> Result<Box<DmxPort>, Error> {
+    match namespace {
+        OFFLINE_NAMESPACE => OfflinePortProvider.open(port_name),
+        ENTTEC_NAMESPACE => EnttecPortProvider.open(port_name),
+        _ => return Err(Error::InvalidNamespace(namespace.to_string())),
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 /// A serializable data structure for persisting a record of a port to disk, also providing
 /// for attempted reopening of a port.
