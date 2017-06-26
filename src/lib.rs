@@ -88,6 +88,23 @@ pub fn open_port<N: Into<String>>(namespace: &str, port_name: N) -> Result<Box<D
     }
 }
 
+/// Gather up all of the providers and use them to get listings of all ports they have available.
+/// Return them as a vector of pairs, each of which would be suitable to feed to open_port.
+/// This function does not check whether or not any of the ports are in use already.
+pub fn available_ports() -> Vec<(String, String)> {
+    let mut ports = Vec::new();
+    fn add_ports<P: DmxPortProvider>(ports: &mut Vec<(String, String)>, provider: P) {
+        let namespace = provider.namespace();
+        let mut available = provider.available_ports();
+        for port_id in available.drain(..) {
+            ports.push((namespace.to_string(), port_id));
+        }
+    }
+    add_ports(&mut ports, OfflinePortProvider);
+    add_ports(&mut ports, EnttecPortProvider);
+    ports
+}
+
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 /// A serializable data structure for persisting a record of a port to disk, also providing
 /// for attempted reopening of a port.
