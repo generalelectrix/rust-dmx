@@ -28,7 +28,9 @@ pub trait DmxPort: fmt::Debug {
 
     /// Return a SerializablePort to be used to try to reopen a port
     /// after deserialization of a saved show or after application restart.
-    fn serializable(&self) -> SerializablePort;
+    fn serializable(&self) -> SerializablePort {
+        SerializablePort::new(self.namespace(), self.port_name())
+    }
 }
 
 /// A source of DmxPorts based on unique string identifiers.
@@ -61,9 +63,6 @@ impl DmxPort for OfflineDmxPort {
     }
     fn port_name(&self) -> &str {
         OFFLINE_ID
-    }
-    fn serializable(&self) -> SerializablePort {
-        SerializablePort::new(OFFLINE_NAMESPACE, OFFLINE_ID)
     }
 }
 

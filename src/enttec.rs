@@ -137,10 +137,6 @@ impl DmxPort for EnttecDmxPort {
     fn port_name(&self) -> &str {
         &self.port_name
     }
-
-    fn serializable(&self) -> SerializablePort {
-        SerializablePort::new(ENTTEC_NAMESPACE, self.port_name())
-    }
 }
 
 pub struct EnttecPortProvider;
