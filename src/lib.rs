@@ -113,20 +113,23 @@ pub fn available_ports() -> Vec<(String, String)> {
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 /// A serializable data structure for persisting a record of a port to disk, also providing
-/// for attempted reopening of a port.
-pub struct SerializablePort<'a> {
-    namespace: &'a str,
-    id: &'a str,
+/// for attempted reopening of a port.  Since we serialize and deserialize directly from disk,
+/// this data structure needs to own its data or Serde will fail upon deserialization as it isn't
+/// quite clever enough to figure out that this reference doesn't need to live beyond the
+/// deserialization step.
+pub struct SerializablePort {
+    namespace: String,
+    id: String,
 }
 
-impl<'a> SerializablePort<'a> {
-    fn new(namespace: &'a str, id: &'a str) -> Self {
-        SerializablePort { namespace: namespace, id: id }
+impl SerializablePort {
+    fn new<N: Into<String>, I: Into<String>>(namespace: N, id: I) -> Self {
+        SerializablePort { namespace: namespace.into(), id: id.into() }
     }
 
     /// Try to open the port described by this serialized form.
-    fn open(&self) -> Result<Box<DmxPort>, Error> {
-        match self.namespace {
+    fn open(self) -> Result<Box<DmxPort>, Error> {
+        match self.namespace.as_str() {
             OFFLINE_NAMESPACE => Ok(Box::new(OfflineDmxPort{})),
             ENTTEC_NAMESPACE => Ok(Box::new(EnttecDmxPort::new(self.id)?)),
             _ => Err(Error::InvalidNamespace(self.namespace.to_string())),
