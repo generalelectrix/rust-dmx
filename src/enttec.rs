@@ -1,13 +1,14 @@
 //! Implementation of support for the Enttec USB DMX Pro dongle.
-use std::{fs, path};
+use std::fs;
 use std::io::Write;
 use std::cmp::min;
 use std::time::Duration;
 use std::fmt;
+use regex::Regex;
 
 use serial::prelude::*;
 use serial::{SystemPort, open};
-use super::{DmxPort, DmxPortProvider, SerializablePort, Error};
+use super::{DmxPort, DmxPortProvider, Error};
 
 
 // Some constants used for enttec message framing.
@@ -80,7 +81,8 @@ impl EnttecDmxPort {
     /// Open a enttec port with the specified port name.
     pub fn new<N: Into<String>>(port_name: N) -> Result<EnttecDmxPort, Error> {
         let port_name = port_name.into();
-        let mut port = open(&port_name)?;
+        let port_path = format!("{}{}", ENTTEC_PATH_PREFIX, port_name);
+        let mut port = open(&port_path)?;
 
         // use a short 1 ms timeout to avoid blocking if, say, the port disappears
         port.set_timeout(Duration::from_millis(1))?;
@@ -141,6 +143,8 @@ impl DmxPort for EnttecDmxPort {
 
 pub struct EnttecPortProvider;
 
+const ENTTEC_PATH_PREFIX: &'static str = "/dev/tty.usbserial-";
+
 impl DmxPortProvider for EnttecPortProvider {
     /// Return a unique namespace for this port provider.
     fn namespace(&self) -> &str {
@@ -152,9 +156,18 @@ impl DmxPortProvider for EnttecPortProvider {
         match fs::read_dir("/dev/") {
             Err(_) => Vec::new(),
             Ok(dirs) => {
-                dirs.filter_map(|x| x.ok().map(|p| p.path()))
-                    .filter(|p| p.starts_with("tty.usbserial"))
-                    .filter_map(|p| p.to_str().map(|s| s.to_string()))
+                dirs.filter_map(|x| x.ok())
+                    .filter_map(|p| {
+                        p.path().to_str().and_then(|p| {
+                            if p.starts_with(ENTTEC_PATH_PREFIX) {
+                                let port_name = p[ENTTEC_PATH_PREFIX.len()..].to_string();
+                                Some(port_name)
+                            }
+                            else {
+                                None
+                            }
+                        })
+                    })
                     .collect()
             }
         }

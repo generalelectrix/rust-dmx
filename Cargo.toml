@@ -7,3 +7,5 @@ authors = ["general electrix <general.electrix@gmail.com>"]
 serial = "*"
 serde = "*"
 serde_derive = "*"
+regex = "*"
+lazy_static = "*"
