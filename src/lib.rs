@@ -1,6 +1,7 @@
 use derive_more::Display;
 use serial::Error as SerialError;
 use std::error::Error as StdError;
+use std::fmt;
 
 mod enttec;
 mod offline;
@@ -10,7 +11,7 @@ pub use offline::OfflineDmxPort;
 
 /// Trait for the general notion of a DMX port.
 /// This enables creation of an "offline" port to slot into place if an API requires an output.
-pub trait DmxPort {
+pub trait DmxPort: fmt::Display {
     /// Return the available ports, and closures that can open them.
     fn available_ports() -> PortListing
     where
