@@ -11,11 +11,18 @@ pub use offline::OfflineDmxPort;
 
 /// Trait for the general notion of a DMX port.
 /// This enables creation of an "offline" port to slot into place if an API requires an output.
+#[typetag::serde(tag = "type")]
 pub trait DmxPort: fmt::Display {
     /// Return the available ports, and closures that can open them.
     fn available_ports() -> PortListing
     where
         Self: Sized;
+
+    /// Open the port for writing.
+    fn open(&mut self) -> Result<(), Error>;
+
+    /// Close the port.
+    fn close(&mut self);
 
     /// Write a DMX frame out to the port.  If the frame is smaller than the minimum universe size,
     /// it will be padded with zeros.  If the frame is larger than the maximum universe size, the
@@ -23,7 +30,10 @@ pub trait DmxPort: fmt::Display {
     fn write(&mut self, frame: &[u8]) -> Result<(), Error>;
 }
 
+/// A closure that returns a fully-opened port.
 pub type PortOpener = dyn Fn() -> Result<Box<dyn DmxPort>, Error>;
+
+/// A listing of available ports, with opener functions.
 type PortListing = Vec<(String, Box<PortOpener>)>;
 
 /// Gather up all of the providers and use them to get listings of all ports they have available.
@@ -40,7 +50,7 @@ pub fn available_ports() -> PortListing {
 pub enum Error {
     Serial(SerialError),
     IO(std::io::Error),
-    InvalidNamespace(String),
+    PortClosed,
 }
 
 impl From<SerialError> for Error {
@@ -61,7 +71,7 @@ impl StdError for Error {
         match *self {
             Serial(ref e) => Some(e),
             IO(ref e) => Some(e),
-            InvalidNamespace(_) => None,
+            PortClosed => None,
         }
     }
 }

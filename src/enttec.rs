@@ -1,5 +1,6 @@
 //! Implementation of support for the Enttec USB DMX Pro dongle.
 
+use serde::{Deserialize, Deserializer, Serialize, Serializer, __private::ser};
 use std::fs;
 use std::io::Write;
 use std::time::Duration;
@@ -76,43 +77,53 @@ impl EnttecParams {
 
 pub struct EnttecDmxPort {
     params: EnttecParams,
-    port: SystemPort,
+    port: Option<SystemPort>,
     port_name: String,
     output_buffer: Vec<u8>,
 }
 
 impl EnttecDmxPort {
-    /// Open a enttec port with the specified port name.
-    pub fn new<N: Into<String>>(port_name: N) -> Result<EnttecDmxPort, Error> {
+    /// Create an enttec port with the specified port name.
+    /// The port is not opened yet.
+    pub fn new<N: Into<String>>(port_name: N) -> Self {
         let port_name = port_name.into();
-        let port_path = format!("{}{}", ENTTEC_PATH_PREFIX, port_name);
-        let mut port = open(&port_path)?;
-
-        // use a short 1 ms timeout to avoid blocking if, say, the port disappears
-        port.set_timeout(Duration::from_millis(1))?;
 
         let params = EnttecParams::default();
 
-        let mut port = EnttecDmxPort {
+        Self {
             params: params,
-            port: port,
+            port: None,
             port_name: port_name,
             output_buffer: Vec::new(),
-        };
+        }
+    }
 
-        // send the default parameters to the port
-        port.write_params()?;
+    /// Create an enttec port with the specified port name, and open it.
+    pub fn opened<N: Into<String>>(port_name: N) -> Result<Self, Error> {
+        let mut port = Self::new(port_name);
+        port.open()?;
         Ok(port)
     }
 
+    /// Write a packet to the port.
+    /// If the port is not open, return an error.
+
     /// Write the current parameters out to the port.
-    pub fn write_params(&mut self) -> Result<(), Error> {
+    fn write_params(&mut self) -> Result<(), Error> {
         self.params.as_packet(&mut self.output_buffer);
-        self.port.write_all(&self.output_buffer)?;
+        self.write_output_buffer()
+    }
+
+    fn write_output_buffer(&mut self) -> Result<(), Error> {
+        match &mut self.port {
+            Some(p) => p.write_all(&self.output_buffer)?,
+            None => return Err(Error::PortClosed),
+        }
         Ok(())
     }
 }
 
+#[typetag::serde]
 impl DmxPort for EnttecDmxPort {
     /// Return the available enttec ports connected to this system.
     /// TODO: provide a mechanism to specialize this implementation depending on platform.
@@ -127,7 +138,7 @@ impl DmxPort for EnttecDmxPort {
                             let port_name = p[ENTTEC_PATH_PREFIX.len()..].to_string();
                             let open_name = port_name.clone();
                             let opener: Box<PortOpener> = Box::new(move || {
-                                EnttecDmxPort::new(open_name.clone())
+                                EnttecDmxPort::opened(open_name.clone())
                                     .map(|p| Box::new(p) as Box<dyn DmxPort>)
                             });
                             Some((port_name, opener))
@@ -138,6 +149,29 @@ impl DmxPort for EnttecDmxPort {
                 })
                 .collect(),
         }
+    }
+
+    /// Open the port.
+    fn open(&mut self) -> Result<(), Error> {
+        if self.port.is_some() {
+            return Ok(());
+        }
+
+        let port_path = format!("{}{}", ENTTEC_PATH_PREFIX, self.port_name);
+        let mut port = open(&port_path)?;
+
+        // use a short 1 ms timeout to avoid blocking if, say, the port disappears
+        port.set_timeout(Duration::from_millis(1))?;
+
+        // send the default parameters to the port
+        self.write_params()?;
+
+        self.port = Some(port);
+        Ok(())
+    }
+
+    fn close(&mut self) {
+        self.port = None;
     }
 
     fn write(&mut self, frame: &[u8]) -> Result<(), Error> {
@@ -155,8 +189,25 @@ impl DmxPort for EnttecDmxPort {
             )
         }
 
-        self.port.write_all(&self.output_buffer)?;
-        Ok(())
+        self.write_output_buffer()
+    }
+}
+
+impl Serialize for EnttecDmxPort {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.port_name.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for EnttecDmxPort {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(Self::new(String::deserialize(deserializer)?))
     }
 }
 

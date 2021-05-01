@@ -10,3 +10,4 @@ serde = { version = "1", features = ["derive"] }
 regex = "1"
 lazy_static = "1"
 derive_more = "^0.99"
+typetag = "0.1"
