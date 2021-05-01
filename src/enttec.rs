@@ -1,12 +1,13 @@
 //! Implementation of support for the Enttec USB DMX Pro dongle.
 
-use std::cmp::min;
-use std::fmt;
 use std::fs;
 use std::io::Write;
 use std::time::Duration;
+use std::{cmp::min, fmt};
 
-use super::{DmxPort, DmxPortProvider, Error};
+use crate::{PortListing, PortOpener};
+
+use super::{DmxPort, Error};
 use serial::prelude::*;
 use serial::{open, SystemPort};
 
@@ -23,22 +24,23 @@ const SET_PARAMETERS: u8 = 4;
 //const RECEIVE_DMX_PACKET: u8 = 5;
 const SEND_DMX_PACKET: u8 = 6;
 
-/// Format a byte buffer as an enttec message.
+/// Format a byte buffer as an enttec message into the provided output buffer.
 /// Maximum valid size for payload is 600; no check is made here that the payload is within this range.
-fn make_packet(message_type: u8, payload: &[u8]) -> Vec<u8> {
+fn make_packet(message_type: u8, payload: &[u8], output: &mut Vec<u8>) {
     // Enttec messages are the size of the payload plus 5 bytes for type, length, and framing.
     let payload_size = payload.len();
-    let mut packet = Vec::with_capacity(payload_size + 5);
+    output.clear();
+    output.reserve(payload_size + 5);
     let (len_lsb, len_msb) = (payload_size as u8, (payload_size >> 8) as u8);
-    packet.push(START_VAL);
-    packet.push(message_type);
-    packet.push(len_lsb);
-    packet.push(len_msb);
-    packet.extend_from_slice(payload);
-    packet.push(END_VAL);
-    packet
+    output.push(START_VAL);
+    output.push(message_type);
+    output.push(len_lsb);
+    output.push(len_msb);
+    output.extend_from_slice(payload);
+    output.push(END_VAL);
 }
 
+#[derive(Debug)]
 pub struct EnttecParams {
     /// DMX output break time in 10.67 microsecond units. Valid range is 9 to 127.
     break_time: u8,
@@ -62,13 +64,13 @@ impl Default for EnttecParams {
 }
 
 impl EnttecParams {
-    fn as_packet(&self) -> Vec<u8> {
+    fn as_packet(&self, output: &mut Vec<u8>) {
         let payload = [
             self.break_time,
             self.mark_after_break_time,
             self.output_rate,
         ];
-        make_packet(SET_PARAMETERS, &payload)
+        make_packet(SET_PARAMETERS, &payload, output)
     }
 }
 
@@ -76,9 +78,8 @@ pub struct EnttecDmxPort {
     params: EnttecParams,
     port: SystemPort,
     port_name: String,
+    output_buffer: Vec<u8>,
 }
-
-pub const ENTTEC_NAMESPACE: &'static str = "enttec";
 
 impl EnttecDmxPort {
     /// Open a enttec port with the specified port name.
@@ -96,6 +97,7 @@ impl EnttecDmxPort {
             params: params,
             port: port,
             port_name: port_name,
+            output_buffer: Vec::new(),
         };
 
         // send the default parameters to the port
@@ -105,56 +107,16 @@ impl EnttecDmxPort {
 
     /// Write the current parameters out to the port.
     pub fn write_params(&mut self) -> Result<(), Error> {
-        self.port.write_all(&self.params.as_packet())?;
+        self.params.as_packet(&mut self.output_buffer);
+        self.port.write_all(&self.output_buffer)?;
         Ok(())
-    }
-}
-
-impl fmt::Debug for EnttecDmxPort {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.serializable().fmt(f)
     }
 }
 
 impl DmxPort for EnttecDmxPort {
-    fn write(&mut self, frame: &[u8]) -> Result<(), Error> {
-        let packet = {
-            let size = frame.len();
-            if size < MIN_UNIVERSE_SIZE {
-                //
-                let mut padded_frame = Vec::with_capacity(MIN_UNIVERSE_SIZE);
-                padded_frame.extend_from_slice(frame);
-                padded_frame.resize(MIN_UNIVERSE_SIZE, 0);
-                make_packet(SEND_DMX_PACKET, &padded_frame)
-            } else {
-                make_packet(SEND_DMX_PACKET, &frame[0..min(size, MAX_UNIVERSE_SIZE)])
-            }
-        };
-        self.port.write_all(&packet)?;
-        Ok(())
-    }
-
-    fn namespace(&self) -> &str {
-        ENTTEC_NAMESPACE
-    }
-
-    fn port_name(&self) -> &str {
-        &self.port_name
-    }
-}
-
-pub struct EnttecPortProvider;
-
-const ENTTEC_PATH_PREFIX: &'static str = "/dev/tty.usbserial-";
-
-impl DmxPortProvider for EnttecPortProvider {
-    /// Return a unique namespace for this port provider.
-    fn namespace(&self) -> &str {
-        ENTTEC_NAMESPACE
-    }
     /// Return the available enttec ports connected to this system.
     /// TODO: provide a mechanism to specialize this implementation depending on platform.
-    fn available_ports(&self) -> Vec<String> {
+    fn available_ports() -> PortListing {
         match fs::read_dir("/dev/") {
             Err(_) => Vec::new(),
             Ok(dirs) => dirs
@@ -163,7 +125,12 @@ impl DmxPortProvider for EnttecPortProvider {
                     p.path().to_str().and_then(|p| {
                         if p.starts_with(ENTTEC_PATH_PREFIX) {
                             let port_name = p[ENTTEC_PATH_PREFIX.len()..].to_string();
-                            Some(port_name)
+                            let open_name = port_name.clone();
+                            let opener: Box<PortOpener> = Box::new(move || {
+                                EnttecDmxPort::new(open_name.clone())
+                                    .map(|p| Box::new(p) as Box<dyn DmxPort>)
+                            });
+                            Some((port_name, opener))
                         } else {
                             None
                         }
@@ -172,8 +139,31 @@ impl DmxPortProvider for EnttecPortProvider {
                 .collect(),
         }
     }
-    /// Attempt to open this port, and return it behind the trait object or an error.
-    fn open<N: Into<String>>(&self, port: N) -> Result<Box<dyn DmxPort>, Error> {
-        EnttecDmxPort::new(port).map(|p| Box::new(p) as Box<dyn DmxPort>)
+
+    fn write(&mut self, frame: &[u8]) -> Result<(), Error> {
+        let size = frame.len();
+        if size < MIN_UNIVERSE_SIZE {
+            let mut padded_frame = Vec::with_capacity(MIN_UNIVERSE_SIZE);
+            padded_frame.extend_from_slice(frame);
+            padded_frame.resize(MIN_UNIVERSE_SIZE, 0);
+            make_packet(SEND_DMX_PACKET, &padded_frame, &mut self.output_buffer)
+        } else {
+            make_packet(
+                SEND_DMX_PACKET,
+                &frame[0..min(size, MAX_UNIVERSE_SIZE)],
+                &mut self.output_buffer,
+            )
+        }
+
+        self.port.write_all(&self.output_buffer)?;
+        Ok(())
+    }
+}
+
+const ENTTEC_PATH_PREFIX: &'static str = "/dev/tty.usbserial-";
+
+impl fmt::Display for EnttecDmxPort {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.port_name)
     }
 }
