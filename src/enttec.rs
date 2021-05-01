@@ -1,6 +1,6 @@
 //! Implementation of support for the Enttec USB DMX Pro dongle.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer, __private::ser};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fs;
 use std::io::Write;
 use std::time::Duration;
