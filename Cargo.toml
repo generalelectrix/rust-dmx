@@ -1,11 +1,13 @@
 [package]
 name = "rust_dmx"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["general electrix <general.electrix@gmail.com>"]
+edition = "2018"
 
 [dependencies]
-serial = "*"
-serde = "*"
-serde_derive = "*"
-regex = "*"
-lazy_static = "*"
+serial = "^0.4"
+serde = { version = "1", features = ["derive"] }
+regex = "1"
+lazy_static = "1"
+derive_more = "^0.99"
+typetag = "0.1"
