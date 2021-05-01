@@ -1,5 +1,5 @@
 //! Implementation of support for the Enttec USB DMX Pro dongle.
-use regex::Regex;
+
 use std::cmp::min;
 use std::fmt;
 use std::fs;
@@ -173,7 +173,7 @@ impl DmxPortProvider for EnttecPortProvider {
         }
     }
     /// Attempt to open this port, and return it behind the trait object or an error.
-    fn open<N: Into<String>>(&self, port: N) -> Result<Box<DmxPort>, Error> {
-        EnttecDmxPort::new(port).map(|p| Box::new(p) as Box<DmxPort>)
+    fn open<N: Into<String>>(&self, port: N) -> Result<Box<dyn DmxPort>, Error> {
+        EnttecDmxPort::new(port).map(|p| Box::new(p) as Box<dyn DmxPort>)
     }
 }

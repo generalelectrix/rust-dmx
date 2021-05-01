@@ -74,14 +74,14 @@ impl DmxPortProvider for OfflinePortProvider {
         vec![OFFLINE_ID.to_string()]
     }
     /// Attempt to open this port, and return it behind the trait object or an error.
-    fn open<N: Into<String>>(&self, _: N) -> Result<Box<DmxPort>, Error> {
+    fn open<N: Into<String>>(&self, _: N) -> Result<Box<dyn DmxPort>, Error> {
         Ok(Box::new(OfflineDmxPort))
     }
 }
 
 /// Gather up all of the providers behind their namespace.
 /// This is your one-stop-shop for port creation.
-pub fn open_port<N: Into<String>>(namespace: &str, port_name: N) -> Result<Box<DmxPort>, Error> {
+pub fn open_port<N: Into<String>>(namespace: &str, port_name: N) -> Result<Box<dyn DmxPort>, Error> {
     match namespace {
         OFFLINE_NAMESPACE => OfflinePortProvider.open(port_name),
         ENTTEC_NAMESPACE => EnttecPortProvider.open(port_name),
@@ -126,7 +126,7 @@ impl SerializablePort {
     }
 
     /// Try to open the port described by this serialized form.
-    fn open(self) -> Result<Box<DmxPort>, Error> {
+    fn open(self) -> Result<Box<dyn DmxPort>, Error> {
         match self.namespace.as_str() {
             OFFLINE_NAMESPACE => Ok(Box::new(OfflineDmxPort {})),
             ENTTEC_NAMESPACE => Ok(Box::new(EnttecDmxPort::new(self.id)?)),
@@ -136,21 +136,21 @@ impl SerializablePort {
 
     /// Based on the namespace and id, try to reopen this DMX port.
     /// If we don't know the namespace or the port isn't available, return an offline port.
-    fn reopen(self) -> Box<DmxPort> {
+    fn reopen(self) -> Box<dyn DmxPort> {
         self.open().unwrap_or(Box::new(OfflineDmxPort {}))
     }
 }
 
 // Helper functions to use when serializing and deserializing DmxPort trait objects contained in
 // other structs.  This can be done using the serde with attribute.
-pub fn serialize<S>(port: &Box<DmxPort>, serializer: S) -> Result<S::Ok, S::Error>
+pub fn serialize<S>(port: &Box<dyn DmxPort>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
     port.serializable().serialize(serializer)
 }
 
-pub fn deserialize<'de, D>(deserializer: D) -> Result<Box<DmxPort>, D::Error>
+pub fn deserialize<'de, D>(deserializer: D) -> Result<Box<dyn DmxPort>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -212,7 +212,7 @@ impl StdError for Error {
         }
     }
 
-    fn cause(&self) -> Option<&StdError> {
+    fn cause(&self) -> Option<&dyn StdError> {
         use Error::*;
         match *self {
             Serial(ref e) => Some(e),
