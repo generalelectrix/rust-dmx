@@ -1,15 +1,14 @@
 //! Implementation of support for the Enttec USB DMX Pro dongle.
+use regex::Regex;
+use std::cmp::min;
+use std::fmt;
 use std::fs;
 use std::io::Write;
-use std::cmp::min;
 use std::time::Duration;
-use std::fmt;
-use regex::Regex;
 
-use serial::prelude::*;
-use serial::{SystemPort, open};
 use super::{DmxPort, DmxPortProvider, Error};
-
+use serial::prelude::*;
+use serial::{open, SystemPort};
 
 // Some constants used for enttec message framing.
 const START_VAL: u8 = 0x7E;
@@ -45,7 +44,7 @@ pub struct EnttecParams {
     break_time: u8,
     /// DMX output Mark After Break time in 10.67 microsecond units. Valid range is 1 to 127.
     mark_after_break_time: u8,
-    /// DMX output rate in packets per second. Valid range is 1 to 40, or 0 for fastest rate 
+    /// DMX output rate in packets per second. Valid range is 1 to 40, or 0 for fastest rate
     /// possible (this will make the most difference when the output universe size is smallest).
     output_rate: u8,
 }
@@ -64,7 +63,11 @@ impl Default for EnttecParams {
 
 impl EnttecParams {
     fn as_packet(&self) -> Vec<u8> {
-        let payload = [self.break_time, self.mark_after_break_time, self.output_rate];
+        let payload = [
+            self.break_time,
+            self.mark_after_break_time,
+            self.output_rate,
+        ];
         make_packet(SET_PARAMETERS, &payload)
     }
 }
@@ -118,13 +121,12 @@ impl DmxPort for EnttecDmxPort {
         let packet = {
             let size = frame.len();
             if size < MIN_UNIVERSE_SIZE {
-                // 
+                //
                 let mut padded_frame = Vec::with_capacity(MIN_UNIVERSE_SIZE);
                 padded_frame.extend_from_slice(frame);
                 padded_frame.resize(MIN_UNIVERSE_SIZE, 0);
                 make_packet(SEND_DMX_PACKET, &padded_frame)
-            }
-            else {
+            } else {
                 make_packet(SEND_DMX_PACKET, &frame[0..min(size, MAX_UNIVERSE_SIZE)])
             }
         };
@@ -155,21 +157,19 @@ impl DmxPortProvider for EnttecPortProvider {
     fn available_ports(&self) -> Vec<String> {
         match fs::read_dir("/dev/") {
             Err(_) => Vec::new(),
-            Ok(dirs) => {
-                dirs.filter_map(|x| x.ok())
-                    .filter_map(|p| {
-                        p.path().to_str().and_then(|p| {
-                            if p.starts_with(ENTTEC_PATH_PREFIX) {
-                                let port_name = p[ENTTEC_PATH_PREFIX.len()..].to_string();
-                                Some(port_name)
-                            }
-                            else {
-                                None
-                            }
-                        })
+            Ok(dirs) => dirs
+                .filter_map(|x| x.ok())
+                .filter_map(|p| {
+                    p.path().to_str().and_then(|p| {
+                        if p.starts_with(ENTTEC_PATH_PREFIX) {
+                            let port_name = p[ENTTEC_PATH_PREFIX.len()..].to_string();
+                            Some(port_name)
+                        } else {
+                            None
+                        }
                     })
-                    .collect()
-            }
+                })
+                .collect(),
         }
     }
     /// Attempt to open this port, and return it behind the trait object or an error.
