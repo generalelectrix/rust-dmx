@@ -105,15 +105,13 @@ impl EnttecDmxPort {
         Ok(port)
     }
 
-    /// Write a packet to the port.
-    /// If the port is not open, return an error.
-
     /// Write the current parameters out to the port.
     fn write_params(&mut self) -> Result<(), Error> {
         self.params.as_packet(&mut self.output_buffer);
         self.write_output_buffer()
     }
 
+    /// Write the current contents of the output buffer to the port.
     fn write_output_buffer(&mut self) -> Result<(), Error> {
         match &mut self.port {
             Some(p) => p.write_all(&self.output_buffer)?,
@@ -163,10 +161,13 @@ impl DmxPort for EnttecDmxPort {
         // use a short 1 ms timeout to avoid blocking if, say, the port disappears
         port.set_timeout(Duration::from_millis(1))?;
 
-        // send the default parameters to the port
-        self.write_params()?;
-
         self.port = Some(port);
+
+        // send the default parameters to the port
+        if let Err(e) = self.write_params() {
+            self.port = None;
+            return Err(e);
+        }
         Ok(())
     }
 
