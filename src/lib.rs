@@ -18,7 +18,9 @@ pub trait DmxPort: fmt::Display {
     where
         Self: Sized;
 
-    /// Open the port for writing.
+    /// Open the port for writing.  Implementations should no-op if this is
+    /// called twice rather than returning an error.  Primarily used to re-open
+    /// a port that has be deserialized.
     fn open(&mut self) -> Result<(), Error>;
 
     /// Close the port.
