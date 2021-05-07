@@ -1,6 +1,6 @@
 [package]
 name = "rust_dmx"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["general electrix <general.electrix@gmail.com>"]
 edition = "2018"
 
