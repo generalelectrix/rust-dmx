@@ -240,3 +240,24 @@ pub struct UsbPortInfoDef {
     pub manufacturer: Option<String>,
     pub product: Option<String>,
 }
+
+#[cfg(test)]
+mod test {
+    use std::{thread::sleep, time::Duration};
+
+    use super::*;
+    use std::error::Error;
+
+    #[test]
+    fn test() -> Result<(), Box<dyn Error>> {
+        let (_, open) = EnttecDmxPort::available_ports()?.pop().unwrap();
+        let mut port = open()?;
+        println!("{}", port);
+        for val in 0..255 {
+            port.write(&[val][..])?;
+            sleep(Duration::from_millis(25));
+        }
+        port.write(&[0][..])?;
+        Ok(())
+    }
+}
