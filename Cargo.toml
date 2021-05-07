@@ -3,6 +3,11 @@ name = "rust_dmx"
 version = "0.3.0"
 authors = ["general electrix <general.electrix@gmail.com>"]
 edition = "2018"
+license-file = "LICENSE"
+keywords = ["DMX", "lighting", "enttec"]
+categories = ["hardware-support", "multimedia"]
+repository = "https://github.com/generalelectrix/rust-dmx"
+description = "Control of DMX-512 lighting control hardware."
 
 [dependencies]
 serialport = "4"
