@@ -80,16 +80,14 @@ impl StdError for Error {
 
 #[cfg(test)]
 mod test {
-    use serialport::available_ports;
+    use super::*;
 
     #[test]
     fn test() {
-        let names = available_ports().unwrap();
-        // .unwrap()
-        // .into_iter()
-        // //.map(|port| port.port_name)
-        // .collect();
-        println!("{:?}", names);
-        assert!(false);
+        let (_, open) = available_ports().unwrap().pop().unwrap();
+        let mut port = open().unwrap();
+        let frame = [255, 255, 255];
+        port.write(&frame[..]).unwrap();
+        loop {}
     }
 }
