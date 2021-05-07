@@ -1,16 +1,14 @@
 //! Implementation of support for the Enttec USB DMX Pro dongle.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fs;
+use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::time::Duration;
 use std::{cmp::min, fmt};
 
-use crate::{PortListing, PortOpener};
+use crate::PortListing;
 
 use super::{DmxPort, Error};
-use serial::prelude::*;
-use serial::{open, SystemPort};
+use serialport::{available_ports, new, SerialPort, SerialPortInfo, SerialPortType, UsbPortInfo};
 
 // Some constants used for enttec message framing.
 const START_VAL: u8 = 0x7E;
@@ -46,7 +44,7 @@ fn write_packet<W: Write>(
     Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EnttecParams {
     /// DMX output break time in 10.67 microsecond units. Valid range is 9 to 127.
     break_time: u8,
@@ -82,32 +80,31 @@ impl EnttecParams {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct EnttecDmxPort {
     params: EnttecParams,
-    port: Option<SystemPort>,
-    port_name: String,
-    output_buffer: Vec<u8>,
+    #[serde(skip)]
+    port: Option<Box<dyn SerialPort>>,
+    #[serde(with = "SerialPortInfoDef")]
+    info: SerialPortInfo,
 }
 
 impl EnttecDmxPort {
-    /// Create an enttec port with the specified port name.
+    /// Create an enttec port.
     /// The port is not opened yet.
-    pub fn new<N: Into<String>>(port_name: N) -> Self {
-        let port_name = port_name.into();
-
+    pub fn new(info: SerialPortInfo) -> Self {
         let params = EnttecParams::default();
 
         Self {
             params: params,
             port: None,
-            port_name: port_name,
-            output_buffer: Vec::new(),
+            info,
         }
     }
 
-    /// Create an enttec port with the specified port name, and open it.
-    pub fn opened<N: Into<String>>(port_name: N) -> Result<Self, Error> {
-        let mut port = Self::new(port_name);
+    /// Create an enttec port and open it.
+    pub fn opened(info: SerialPortInfo) -> Result<Self, Error> {
+        let mut port = Self::new(info);
         port.open()?;
         Ok(port)
     }
@@ -123,28 +120,27 @@ impl EnttecDmxPort {
 impl DmxPort for EnttecDmxPort {
     /// Return the available enttec ports connected to this system.
     /// TODO: provide a mechanism to specialize this implementation depending on platform.
-    fn available_ports() -> PortListing {
-        match fs::read_dir("/dev/") {
-            Err(_) => Vec::new(),
-            Ok(dirs) => dirs
-                .filter_map(|x| x.ok())
-                .filter_map(|p| {
-                    p.path().to_str().and_then(|p| {
-                        if p.starts_with(ENTTEC_PATH_PREFIX) {
-                            let port_name = p[ENTTEC_PATH_PREFIX.len()..].to_string();
-                            let open_name = port_name.clone();
-                            let opener: Box<PortOpener> = Box::new(move || {
-                                EnttecDmxPort::opened(open_name.clone())
-                                    .map(|p| Box::new(p) as Box<dyn DmxPort>)
-                            });
-                            Some((port_name, opener))
-                        } else {
-                            None
-                        }
-                    })
-                })
-                .collect(),
-        }
+    fn available_ports() -> Result<PortListing, Error> {
+        Ok(available_ports()?
+            .into_iter()
+            .filter(|info| {
+                if let SerialPortType::UsbPort(usb_port_info) = &info.port_type {
+                    if let Some(product) = &usb_port_info.product {
+                        // this should handle the unix case
+                        #[cfg(unix)]
+                        return product == "DMX USB PRO";
+                        // the windows case, unfortunately, we do not have
+                        // enough details from the COM port interface to ensure that
+                        // we only include enttecs.  The best we can do is filter
+                        // down to FTDI ports.
+                        #[cfg(windows)]
+                        return product == "FTDI";
+                    }
+                }
+                false
+            })
+            .map(|info| Box::new(EnttecDmxPort::new(info)) as Box<dyn DmxPort>)
+            .collect())
     }
 
     /// Open the port.
@@ -153,11 +149,10 @@ impl DmxPort for EnttecDmxPort {
             return Ok(());
         }
 
-        let port_path = format!("{}{}", ENTTEC_PATH_PREFIX, self.port_name);
-        let mut port = open(&port_path)?;
-
-        // use a short 1 ms timeout to avoid blocking if, say, the port disappears
-        port.set_timeout(Duration::from_millis(1))?;
+        // baud rate is not used on FTDI
+        let port = new(&self.info.port_name, 57600)
+            .timeout(Duration::from_millis(1))
+            .open()?;
 
         self.port = Some(port);
 
@@ -192,28 +187,67 @@ impl DmxPort for EnttecDmxPort {
     }
 }
 
-impl Serialize for EnttecDmxPort {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        self.port_name.serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for EnttecDmxPort {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Ok(Self::new(String::deserialize(deserializer)?))
-    }
-}
-
-const ENTTEC_PATH_PREFIX: &'static str = "/dev/tty.usbserial-";
-
 impl fmt::Display for EnttecDmxPort {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.port_name)
+        match &self.info.port_type {
+            SerialPortType::UsbPort(p) => {
+                if let Some(sn) = &p.serial_number {
+                    return write!(f, "Enttec DMX USB PRO {}", sn);
+                }
+            }
+            _ => (),
+        }
+        write!(f, "Enttec DMX USB PRO {}", self.info.port_name)
+    }
+}
+
+// Derive serde for serial port info.
+
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "SerialPortInfo")]
+struct SerialPortInfoDef {
+    pub port_name: String,
+    #[serde(with = "SerialPortTypeDef")]
+    pub port_type: SerialPortType,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "SerialPortType")]
+pub enum SerialPortTypeDef {
+    #[serde(with = "UsbPortInfoDef")]
+    UsbPort(UsbPortInfo),
+    PciPort,
+    BluetoothPort,
+    Unknown,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "UsbPortInfo")]
+pub struct UsbPortInfoDef {
+    pub vid: u16,
+    pub pid: u16,
+    pub serial_number: Option<String>,
+    pub manufacturer: Option<String>,
+    pub product: Option<String>,
+}
+
+#[cfg(test)]
+mod test {
+    use std::{thread::sleep, time::Duration};
+
+    use super::*;
+    use std::error::Error;
+
+    #[test]
+    fn test() -> Result<(), Box<dyn Error>> {
+        let mut port = EnttecDmxPort::available_ports()?.pop().unwrap();
+        println!("{}", port);
+        port.open()?;
+        for val in 0..255 {
+            port.write(&[val][..])?;
+            sleep(Duration::from_millis(25));
+        }
+        port.write(&[0][..])?;
+        Ok(())
     }
 }

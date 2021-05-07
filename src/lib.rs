@@ -1,5 +1,5 @@
 use derive_more::Display;
-use serial::Error as SerialError;
+use serialport::Error as SerialError;
 use std::error::Error as StdError;
 use std::fmt;
 
@@ -13,8 +13,8 @@ pub use offline::OfflineDmxPort;
 /// This enables creation of an "offline" port to slot into place if an API requires an output.
 #[typetag::serde(tag = "type")]
 pub trait DmxPort: fmt::Display {
-    /// Return the available ports, and closures that can open them.
-    fn available_ports() -> PortListing
+    /// Return the available ports.  The ports will need to be opened before use.
+    fn available_ports() -> Result<PortListing, Error>
     where
         Self: Sized;
 
@@ -32,20 +32,17 @@ pub trait DmxPort: fmt::Display {
     fn write(&mut self, frame: &[u8]) -> Result<(), Error>;
 }
 
-/// A closure that returns a fully-opened port.
-pub type PortOpener = dyn Fn() -> Result<Box<dyn DmxPort>, Error>;
-
-/// A listing of available ports, with opener functions.
-type PortListing = Vec<(String, Box<PortOpener>)>;
+/// A listing of available ports.
+type PortListing = Vec<Box<dyn DmxPort>>;
 
 /// Gather up all of the providers and use them to get listings of all ports they have available.
 /// Return them as a vector of names plus opener functions.
 /// This function does not check whether or not any of the ports are in use already.
-pub fn available_ports() -> PortListing {
+pub fn available_ports() -> Result<PortListing, Error> {
     let mut ports = Vec::new();
-    ports.extend(OfflineDmxPort::available_ports().into_iter());
-    ports.extend(EnttecDmxPort::available_ports().into_iter());
-    ports
+    ports.extend(OfflineDmxPort::available_ports()?.into_iter());
+    ports.extend(EnttecDmxPort::available_ports()?.into_iter());
+    Ok(ports)
 }
 
 #[derive(Debug, Display)]

@@ -5,7 +5,7 @@ authors = ["general electrix <general.electrix@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-serial = "^0.4"
+serialport = "4"
 serde = { version = "1", features = ["derive"] }
 regex = "1"
 lazy_static = "1"
