@@ -23,20 +23,25 @@ const SET_PARAMETERS: u8 = 4;
 //const RECEIVE_DMX_PACKET: u8 = 5;
 const SEND_DMX_PACKET: u8 = 6;
 
-/// Format a byte buffer as an enttec message into the provided output buffer.
+/// Format a byte buffer as an enttec message into the provided writer.
 /// Maximum valid size for payload is 600; no check is made here that the payload is within this range.
-fn make_packet(message_type: u8, payload: &[u8], output: &mut Vec<u8>) {
+fn write_packet<W: Write>(
+    message_type: u8,
+    payload: &[u8],
+    add_payload_pad_byte: bool,
+    mut w: W,
+) -> Result<(), Error> {
     // Enttec messages are the size of the payload plus 5 bytes for type, length, and framing.
-    let payload_size = payload.len();
-    output.clear();
-    output.reserve(payload_size + 5);
+    let payload_size = payload.len() + add_payload_pad_byte as usize;
     let (len_lsb, len_msb) = (payload_size as u8, (payload_size >> 8) as u8);
-    output.push(START_VAL);
-    output.push(message_type);
-    output.push(len_lsb);
-    output.push(len_msb);
-    output.extend_from_slice(payload);
-    output.push(END_VAL);
+    let header = [START_VAL, message_type, len_lsb, len_msb];
+    w.write_all(&header)?;
+    if add_payload_pad_byte {
+        w.write_all(&[0][..])?;
+    }
+    w.write_all(payload)?;
+    w.write_all(&[END_VAL][..])?;
+    Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -63,13 +68,15 @@ impl Default for EnttecParams {
 }
 
 impl EnttecParams {
-    fn as_packet(&self, output: &mut Vec<u8>) {
+    fn write_into<W: Write>(&self, w: W) -> Result<(), Error> {
         let payload = [
+            0, // user size lsb?
+            0, // user size msb?
             self.break_time,
             self.mark_after_break_time,
             self.output_rate,
         ];
-        make_packet(SET_PARAMETERS, &payload, output)
+        write_packet(SET_PARAMETERS, &payload, false, w)
     }
 }
 
@@ -107,17 +114,8 @@ impl EnttecDmxPort {
 
     /// Write the current parameters out to the port.
     fn write_params(&mut self) -> Result<(), Error> {
-        self.params.as_packet(&mut self.output_buffer);
-        self.write_output_buffer()
-    }
-
-    /// Write the current contents of the output buffer to the port.
-    fn write_output_buffer(&mut self) -> Result<(), Error> {
-        match &mut self.port {
-            Some(p) => p.write_all(&self.output_buffer)?,
-            None => return Err(Error::PortClosed),
-        }
-        Ok(())
+        self.params
+            .write_into(self.port.as_mut().ok_or(Error::PortClosed)?)
     }
 }
 
@@ -173,21 +171,21 @@ impl DmxPort for EnttecDmxPort {
     }
 
     fn write(&mut self, frame: &[u8]) -> Result<(), Error> {
+        let port = self.port.as_mut().ok_or(Error::PortClosed)?;
         let size = frame.len();
         if size < MIN_UNIVERSE_SIZE {
             let mut padded_frame = Vec::with_capacity(MIN_UNIVERSE_SIZE);
             padded_frame.extend_from_slice(frame);
             padded_frame.resize(MIN_UNIVERSE_SIZE, 0);
-            make_packet(SEND_DMX_PACKET, &padded_frame, &mut self.output_buffer)
+            write_packet(SEND_DMX_PACKET, &padded_frame, true, port)
         } else {
-            make_packet(
+            write_packet(
                 SEND_DMX_PACKET,
                 &frame[0..min(size, MAX_UNIVERSE_SIZE)],
-                &mut self.output_buffer,
+                true,
+                port,
             )
         }
-
-        self.write_output_buffer()
     }
 }
 
