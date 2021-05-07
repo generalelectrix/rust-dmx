@@ -77,17 +77,3 @@ impl StdError for Error {
         }
     }
 }
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test() {
-        let (_, open) = available_ports().unwrap().pop().unwrap();
-        let mut port = open().unwrap();
-        let frame = [255, 255, 255];
-        port.write(&frame[..]).unwrap();
-        loop {}
-    }
-}
