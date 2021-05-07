@@ -1,11 +1,11 @@
 //! Implementation of support for the Enttec USB DMX Pro dongle.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::time::Duration;
 use std::{cmp::min, fmt};
 
-use crate::{PortListing, PortOpener};
+use crate::PortListing;
 
 use super::{DmxPort, Error};
 use serialport::{available_ports, new, SerialPort, SerialPortInfo, SerialPortType, UsbPortInfo};
@@ -87,8 +87,6 @@ pub struct EnttecDmxPort {
     port: Option<Box<dyn SerialPort>>,
     #[serde(with = "SerialPortInfoDef")]
     info: SerialPortInfo,
-    #[serde(skip)]
-    output_buffer: Vec<u8>,
 }
 
 impl EnttecDmxPort {
@@ -101,7 +99,6 @@ impl EnttecDmxPort {
             params: params,
             port: None,
             info,
-            output_buffer: Vec::new(),
         }
     }
 
@@ -142,14 +139,7 @@ impl DmxPort for EnttecDmxPort {
                 }
                 false
             })
-            .map(|info| {
-                let open_info = info.clone();
-                let opener: Box<PortOpener> = Box::new(move || {
-                    EnttecDmxPort::opened(open_info.clone())
-                        .map(|p| Box::new(p) as Box<dyn DmxPort>)
-                });
-                (info, opener)
-            })
+            .map(|info| Box::new(EnttecDmxPort::new(info)) as Box<dyn DmxPort>)
             .collect())
     }
 
@@ -160,7 +150,7 @@ impl DmxPort for EnttecDmxPort {
         }
 
         // baud rate is not used on FTDI
-        let mut port = new(&self.info.port_name, 57600)
+        let port = new(&self.info.port_name, 57600)
             .timeout(Duration::from_millis(1))
             .open()?;
 
@@ -250,9 +240,9 @@ mod test {
 
     #[test]
     fn test() -> Result<(), Box<dyn Error>> {
-        let (_, open) = EnttecDmxPort::available_ports()?.pop().unwrap();
-        let mut port = open()?;
+        let mut port = EnttecDmxPort::available_ports()?.pop().unwrap();
         println!("{}", port);
+        port.open()?;
         for val in 0..255 {
             port.write(&[val][..])?;
             sleep(Duration::from_millis(25));

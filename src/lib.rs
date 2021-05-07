@@ -1,5 +1,5 @@
 use derive_more::Display;
-use serialport::{Error as SerialError, SerialPortInfo};
+use serialport::Error as SerialError;
 use std::error::Error as StdError;
 use std::fmt;
 
@@ -13,7 +13,7 @@ pub use offline::OfflineDmxPort;
 /// This enables creation of an "offline" port to slot into place if an API requires an output.
 #[typetag::serde(tag = "type")]
 pub trait DmxPort: fmt::Display {
-    /// Return the available ports, and closures that can open them.
+    /// Return the available ports.  The ports will need to be opened before use.
     fn available_ports() -> Result<PortListing, Error>
     where
         Self: Sized;
@@ -32,11 +32,8 @@ pub trait DmxPort: fmt::Display {
     fn write(&mut self, frame: &[u8]) -> Result<(), Error>;
 }
 
-/// A closure that returns a fully-opened port.
-pub type PortOpener = dyn Fn() -> Result<Box<dyn DmxPort>, Error>;
-
-/// A listing of available ports, with opener functions.
-type PortListing = Vec<(SerialPortInfo, Box<PortOpener>)>;
+/// A listing of available ports.
+type PortListing = Vec<Box<dyn DmxPort>>;
 
 /// Gather up all of the providers and use them to get listings of all ports they have available.
 /// Return them as a vector of names plus opener functions.

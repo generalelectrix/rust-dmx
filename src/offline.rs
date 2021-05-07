@@ -1,6 +1,5 @@
-use crate::{DmxPort, Error, PortOpener};
+use crate::{DmxPort, Error, PortListing};
 use serde::{Deserialize, Serialize};
-use serialport::{SerialPortInfo, SerialPortType};
 
 use std::fmt;
 
@@ -9,14 +8,8 @@ pub struct OfflineDmxPort;
 
 #[typetag::serde]
 impl DmxPort for OfflineDmxPort {
-    fn available_ports() -> Result<Vec<(SerialPortInfo, Box<PortOpener>)>, Error> {
-        Ok(vec![(
-            SerialPortInfo {
-                port_name: "offline".to_string(),
-                port_type: SerialPortType::Unknown,
-            },
-            Box::new(|| Ok(Box::new(Self))),
-        )])
+    fn available_ports() -> Result<PortListing, Error> {
+        Ok(vec![(Box::new(Self))])
     }
 
     fn open(&mut self) -> Result<(), Error> {
