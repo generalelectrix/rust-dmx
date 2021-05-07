@@ -129,7 +129,15 @@ impl DmxPort for EnttecDmxPort {
             .filter(|info| {
                 if let SerialPortType::UsbPort(usb_port_info) = &info.port_type {
                     if let Some(product) = &usb_port_info.product {
+                        // this should handle the unix case
+                        #[cfg(unix)]
                         return product == "DMX USB PRO";
+                        // the windows case, unfortunately, we do not have
+                        // enough details from the COM port interface to ensure that
+                        // we only include enttecs.  The best we can do is filter
+                        // down to FTDI ports.
+                        #[cfg(windows)]
+                        return product == "FTDI";
                     }
                 }
                 false
