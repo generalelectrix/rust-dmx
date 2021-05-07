@@ -1,9 +1,9 @@
 [package]
 name = "rust_dmx"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["general electrix <general.electrix@gmail.com>"]
 edition = "2018"
-license-file = "LICENSE"
+license = "MIT"
 keywords = ["DMX", "lighting", "enttec"]
 categories = ["hardware-support", "multimedia"]
 repository = "https://github.com/generalelectrix/rust-dmx"
