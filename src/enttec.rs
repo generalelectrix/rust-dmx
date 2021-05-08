@@ -125,17 +125,7 @@ impl DmxPort for EnttecDmxPort {
             .into_iter()
             .filter(|info| {
                 if let SerialPortType::UsbPort(usb_port_info) = &info.port_type {
-                    if let Some(product) = &usb_port_info.product {
-                        // this should handle the unix case
-                        #[cfg(unix)]
-                        return product == "DMX USB PRO";
-                        // the windows case, unfortunately, we do not have
-                        // enough details from the COM port interface to ensure that
-                        // we only include enttecs.  The best we can do is filter
-                        // down to FTDI ports.
-                        #[cfg(windows)]
-                        return product == "FTDI";
-                    }
+                    return is_enttec(usb_port_info);
                 }
                 false
             })
@@ -199,6 +189,22 @@ impl fmt::Display for EnttecDmxPort {
         }
         write!(f, "Enttec DMX USB PRO {}", self.info.port_name)
     }
+}
+
+#[cfg(unix)]
+fn is_enttec(info: &UsbPortInfo) -> bool {
+    if let Some(product) = &info.product {
+        return product == "DMX USB PRO";
+    }
+    false
+}
+
+#[cfg(windows)]
+fn is_enttec(info: &UsbPortInfo) -> bool {
+    if let Some(manufacturer) = &info.manufacturer {
+        return manufacturer == "FTDI";
+    }
+    false
 }
 
 // Derive serde for serial port info.
