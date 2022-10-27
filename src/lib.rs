@@ -1,7 +1,9 @@
 use derive_more::Display;
+use io::Write;
 use serialport::Error as SerialError;
 use std::error::Error as StdError;
 use std::fmt;
+use std::io;
 
 mod enttec;
 mod offline;
@@ -46,6 +48,41 @@ pub fn available_ports() -> Result<PortListing, Error> {
     ports.extend(OfflineDmxPort::available_ports()?.into_iter());
     ports.extend(EnttecDmxPort::available_ports()?.into_iter());
     Ok(ports)
+}
+
+/// Prompt the user to select a port via the command prompt.
+pub fn select_port() -> Result<Box<dyn DmxPort>, Error> {
+    let mut ports = available_ports()?;
+    println!("Available DMX ports:");
+    for (i, port) in ports.iter().enumerate() {
+        println!("{}: {}", i, port.name());
+    }
+    let mut port = loop {
+        print!("Select a port: ");
+        io::stdout().flush()?;
+        let input = read_string()?;
+        let index = match input.trim().parse::<usize>() {
+            Ok(num) => num,
+            Err(e) => {
+                println!("{}; please enter an integer.", e);
+                continue;
+            }
+        };
+        if index >= ports.len() {
+            println!("Please enter a value less than {}.", ports.len());
+            continue;
+        }
+        break ports.swap_remove(index);
+    };
+    port.open()?;
+    Ok(port)
+}
+
+/// Read a line of input from stdin.
+fn read_string() -> Result<String, io::Error> {
+    let mut line = String::new();
+    io::stdin().read_line(&mut line)?;
+    Ok(line.trim().to_string())
 }
 
 #[derive(Debug, Display)]
