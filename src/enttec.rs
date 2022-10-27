@@ -133,6 +133,10 @@ impl DmxPort for EnttecDmxPort {
             .collect())
     }
 
+    fn name(&self) -> &str {
+        &self.info.port_name
+    }
+
     /// Open the port.
     fn open(&mut self) -> Result<(), Error> {
         if self.port.is_some() {

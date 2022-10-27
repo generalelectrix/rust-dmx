@@ -12,6 +12,10 @@ impl DmxPort for OfflineDmxPort {
         Ok(vec![(Box::new(Self))])
     }
 
+    fn name(&self) -> &str {
+        "offline"
+    }
+
     fn open(&mut self) -> Result<(), Error> {
         Ok(())
     }
