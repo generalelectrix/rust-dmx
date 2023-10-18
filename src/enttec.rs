@@ -2,7 +2,7 @@
 use log::debug;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::{cmp::min, fmt};
 use thiserror::Error;
 
