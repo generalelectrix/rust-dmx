@@ -1,9 +1,7 @@
-use derive_more::Display;
 use io::Write;
-use serialport::Error as SerialError;
-use std::error::Error as StdError;
 use std::fmt;
 use std::io;
+use thiserror::Error;
 
 mod enttec;
 mod offline;
@@ -16,17 +14,14 @@ pub use offline::OfflineDmxPort;
 #[typetag::serde(tag = "type")]
 pub trait DmxPort: fmt::Display {
     /// Return the available ports.  The ports will need to be opened before use.
-    fn available_ports() -> Result<PortListing, Error>
+    fn available_ports() -> anyhow::Result<PortListing>
     where
         Self: Sized;
-
-    /// Return a string identifier for this port.
-    fn name(&self) -> &str;
 
     /// Open the port for writing.  Implementations should no-op if this is
     /// called twice rather than returning an error.  Primarily used to re-open
     /// a port that has be deserialized.
-    fn open(&mut self) -> Result<(), Error>;
+    fn open(&mut self) -> Result<(), OpenError>;
 
     /// Close the port.
     fn close(&mut self);
@@ -34,7 +29,7 @@ pub trait DmxPort: fmt::Display {
     /// Write a DMX frame out to the port.  If the frame is smaller than the minimum universe size,
     /// it will be padded with zeros.  If the frame is larger than the maximum universe size, the
     /// values beyond the max size will be ignored.
-    fn write(&mut self, frame: &[u8]) -> Result<(), Error>;
+    fn write(&mut self, frame: &[u8]) -> Result<(), WriteError>;
 }
 
 /// A listing of available ports.
@@ -43,19 +38,19 @@ type PortListing = Vec<Box<dyn DmxPort>>;
 /// Gather up all of the providers and use them to get listings of all ports they have available.
 /// Return them as a vector of names plus opener functions.
 /// This function does not check whether or not any of the ports are in use already.
-pub fn available_ports() -> Result<PortListing, Error> {
+pub fn available_ports() -> anyhow::Result<PortListing> {
     let mut ports = Vec::new();
-    ports.extend(OfflineDmxPort::available_ports()?.into_iter());
-    ports.extend(EnttecDmxPort::available_ports()?.into_iter());
+    ports.extend(OfflineDmxPort::available_ports()?);
+    ports.extend(EnttecDmxPort::available_ports()?);
     Ok(ports)
 }
 
 /// Prompt the user to select a port via the command prompt.
-pub fn select_port() -> Result<Box<dyn DmxPort>, Error> {
+pub fn select_port() -> anyhow::Result<Box<dyn DmxPort>> {
     let mut ports = available_ports()?;
     println!("Available DMX ports:");
     for (i, port) in ports.iter().enumerate() {
-        println!("{}: {}", i, port.name());
+        println!("{}: {}", i, port);
     }
     let mut port = loop {
         print!("Select a port: ");
@@ -85,32 +80,18 @@ fn read_string() -> Result<String, io::Error> {
     Ok(line.trim().to_string())
 }
 
-#[derive(Debug, Display)]
-pub enum Error {
-    Serial(SerialError),
-    IO(std::io::Error),
-    PortClosed,
+#[derive(Error, Debug)]
+pub enum OpenError {
+    #[error("the DMX port is not connected")]
+    NotConnected,
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
-impl From<SerialError> for Error {
-    fn from(e: SerialError) -> Self {
-        Error::Serial(e)
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Self {
-        Error::IO(e)
-    }
-}
-
-impl StdError for Error {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        use Error::*;
-        match *self {
-            Serial(ref e) => Some(e),
-            IO(ref e) => Some(e),
-            PortClosed => None,
-        }
-    }
+#[derive(Error, Debug)]
+pub enum WriteError {
+    #[error("the DMX port is not connected")]
+    Disconnected,
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }

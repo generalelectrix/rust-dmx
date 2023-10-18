@@ -1,4 +1,4 @@
-use crate::{DmxPort, Error, PortListing};
+use crate::{DmxPort, OpenError, PortListing, WriteError};
 use serde::{Deserialize, Serialize};
 
 use std::fmt;
@@ -8,21 +8,17 @@ pub struct OfflineDmxPort;
 
 #[typetag::serde]
 impl DmxPort for OfflineDmxPort {
-    fn available_ports() -> Result<PortListing, Error> {
+    fn available_ports() -> anyhow::Result<PortListing> {
         Ok(vec![(Box::new(Self))])
     }
 
-    fn name(&self) -> &str {
-        "offline"
-    }
-
-    fn open(&mut self) -> Result<(), Error> {
+    fn open(&mut self) -> Result<(), OpenError> {
         Ok(())
     }
 
     fn close(&mut self) {}
 
-    fn write(&mut self, _: &[u8]) -> Result<(), Error> {
+    fn write(&mut self, _: &[u8]) -> Result<(), WriteError> {
         Ok(())
     }
 }
