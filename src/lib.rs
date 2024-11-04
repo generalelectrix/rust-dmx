@@ -1,11 +1,14 @@
 use io::Write;
 use std::fmt;
 use std::io;
+use std::time::Duration;
 use thiserror::Error;
 
+mod artnet;
 mod enttec;
 mod offline;
 
+pub use artnet::ArtnetDmxPort;
 pub use enttec::EnttecDmxPort;
 pub use offline::OfflineDmxPort;
 
@@ -14,7 +17,7 @@ pub use offline::OfflineDmxPort;
 #[typetag::serde(tag = "type")]
 pub trait DmxPort: fmt::Display {
     /// Return the available ports.  The ports will need to be opened before use.
-    fn available_ports() -> anyhow::Result<PortListing>
+    fn available_ports(wait: Duration) -> anyhow::Result<PortListing>
     where
         Self: Sized;
 
@@ -38,16 +41,25 @@ type PortListing = Vec<Box<dyn DmxPort>>;
 /// Gather up all of the providers and use them to get listings of all ports they have available.
 /// Return them as a vector of names plus opener functions.
 /// This function does not check whether or not any of the ports are in use already.
-pub fn available_ports() -> anyhow::Result<PortListing> {
+///
+/// If browse_artnet is Some, poll the network for artnet devices for the provided
+/// wait time. If None, do not search for artnet nodes.
+pub fn available_ports(browse_artnet: Option<Duration>) -> anyhow::Result<PortListing> {
     let mut ports = Vec::new();
-    ports.extend(OfflineDmxPort::available_ports()?);
-    ports.extend(EnttecDmxPort::available_ports()?);
+    ports.extend(OfflineDmxPort::available_ports(Duration::ZERO)?);
+    ports.extend(EnttecDmxPort::available_ports(Duration::ZERO)?);
+    if let Some(wait) = browse_artnet {
+        ports.extend(ArtnetDmxPort::available_ports(wait)?);
+    }
     Ok(ports)
 }
 
 /// Prompt the user to select a port via the command prompt.
-pub fn select_port() -> anyhow::Result<Box<dyn DmxPort>> {
-    let mut ports = available_ports()?;
+///
+/// If browse_artnet is Some, poll the network for artnet devices for the provided
+/// wait time. If None, do not search for artnet nodes.
+pub fn select_port(browse_artnet: Option<Duration>) -> anyhow::Result<Box<dyn DmxPort>> {
+    let mut ports = available_ports(browse_artnet)?;
     println!("Available DMX ports:");
     for (i, port) in ports.iter().enumerate() {
         println!("{}: {}", i, port);
