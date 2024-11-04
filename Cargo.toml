@@ -2,7 +2,7 @@
 name = "rust_dmx"
 version = "0.5.0"
 authors = ["general electrix <general.electrix@gmail.com>"]
-edition = "2018"
+edition = "2021"
 license = "MIT"
 keywords = ["DMX", "lighting", "enttec"]
 categories = ["hardware-support", "multimedia"]
@@ -10,10 +10,9 @@ repository = "https://github.com/generalelectrix/rust-dmx"
 description = "Control of DMX-512 lighting control hardware."
 
 [dependencies]
-serialport = "4"
+serialport = "4.6"
 serde = { version = "1", features = ["derive"] }
-derive_more = "0.99"
 typetag = "0.2"
-thiserror = "1.0.49"
-anyhow = "1.0.75"
-log = "0.4.20"
+thiserror = "1"
+anyhow = "1"
+log = "0.4"
