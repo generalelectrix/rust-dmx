@@ -126,7 +126,7 @@ impl EnttecDmxPort {
 impl DmxPort for EnttecDmxPort {
     /// Return the available enttec ports connected to this system.
     /// TODO: provide a mechanism to specialize this implementation depending on platform.
-    fn available_ports() -> anyhow::Result<PortListing> {
+    fn available_ports(_wait: Duration) -> anyhow::Result<PortListing> {
         Ok(serialport::available_ports()?
             .into_iter()
             .filter(is_enttec)
@@ -288,7 +288,9 @@ mod test {
 
     #[test]
     fn test() -> Result<(), Box<dyn Error>> {
-        let mut port = EnttecDmxPort::available_ports()?.pop().unwrap();
+        let mut port = EnttecDmxPort::available_ports(Duration::ZERO)?
+            .pop()
+            .unwrap();
         println!("{}", port);
         port.open()?;
         for val in 0..255 {
