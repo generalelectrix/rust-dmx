@@ -1,7 +1,7 @@
-use crate::{DmxPort, OpenError, PortListing, WriteError};
+use crate::{DmxPort, OpenError, WriteError};
 use serde::{Deserialize, Serialize};
 
-use std::{fmt, time::Duration};
+use std::fmt;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OfflineDmxPort;
