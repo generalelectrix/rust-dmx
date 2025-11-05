@@ -6,12 +6,13 @@ use std::{fmt, time::Duration};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OfflineDmxPort;
 
+/// Return an offline DMX port that can be included in a port listing.
+pub fn offline() -> Box<dyn DmxPort> {
+    Box::new(OfflineDmxPort)
+}
+
 #[typetag::serde]
 impl DmxPort for OfflineDmxPort {
-    fn available_ports(_: Duration) -> anyhow::Result<PortListing> {
-        Ok(vec![(Box::new(Self))])
-    }
-
     fn open(&mut self) -> Result<(), OpenError> {
         Ok(())
     }

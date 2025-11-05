@@ -10,17 +10,12 @@ mod offline;
 
 pub use artnet::ArtnetDmxPort;
 pub use enttec::EnttecDmxPort;
-pub use offline::OfflineDmxPort;
+pub use offline::{offline, OfflineDmxPort};
 
 /// Trait for the general notion of a DMX port.
 /// This enables creation of an "offline" port to slot into place if an API requires an output.
 #[typetag::serde(tag = "type")]
 pub trait DmxPort: fmt::Display {
-    /// Return the available ports.  The ports will need to be opened before use.
-    fn available_ports(wait: Duration) -> anyhow::Result<PortListing>
-    where
-        Self: Sized;
-
     /// Open the port for writing.  Implementations should no-op if this is
     /// called twice rather than returning an error.  Primarily used to re-open
     /// a port that has be deserialized.
@@ -39,14 +34,15 @@ pub trait DmxPort: fmt::Display {
 type PortListing = Vec<Box<dyn DmxPort>>;
 
 /// Gather up all of the providers and use them to get listings of all ports they have available.
-/// Return them as a vector of names plus opener functions.
 /// This function does not check whether or not any of the ports are in use already.
 ///
 /// If browse_artnet is Some, poll the network for artnet devices for the provided
 /// wait time. If None, do not search for artnet nodes.
+///
+/// Note that the offline port is not included in the result; the option to use
+/// an offline port is provided directly in the CLI port selection functions.
 pub fn available_ports(browse_artnet: Option<Duration>) -> anyhow::Result<PortListing> {
     let mut ports = Vec::new();
-    ports.extend(OfflineDmxPort::available_ports(Duration::ZERO)?);
     ports.extend(EnttecDmxPort::available_ports(Duration::ZERO)?);
     if let Some(wait) = browse_artnet {
         ports.extend(ArtnetDmxPort::available_ports(wait)?);
@@ -69,11 +65,12 @@ pub fn select_port(browse_artnet: Option<Duration>) -> anyhow::Result<Box<dyn Dm
 /// Prompt the user to select a port via the command prompt.
 ///
 /// Select from the provided collection of ports; these can be collected by the
-/// available_ports function.
+/// available_ports function. The option to use an offline port is injected here.
 pub fn select_port_from(ports: &mut PortListing) -> anyhow::Result<Box<dyn DmxPort>> {
     println!("Available DMX ports:");
+    println!("0: offline");
     for (i, port) in ports.iter().enumerate() {
-        println!("{}: {}", i, port);
+        println!("{}: {}", i + 1, port);
     }
     let mut port = loop {
         print!("Select a port: ");
@@ -86,11 +83,15 @@ pub fn select_port_from(ports: &mut PortListing) -> anyhow::Result<Box<dyn DmxPo
                 continue;
             }
         };
+        if index == 0 {
+            return Ok(offline());
+        }
+        let index = index - 1;
         if index >= ports.len() {
-            println!("Please enter a value less than {}.", ports.len());
+            println!("Please enter a value less than {}.", ports.len() + 1);
             continue;
         }
-        break ports.swap_remove(index);
+        break ports.remove(index);
     };
     port.open()?;
     Ok(port)

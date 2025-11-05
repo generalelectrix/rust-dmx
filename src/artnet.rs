@@ -76,36 +76,8 @@ fn get_socket() -> anyhow::Result<UdpSocket> {
 }
 
 impl ArtnetDmxPort {
-    fn from_poll(reply: &PollReply) -> Result<Self> {
-        Ok(Self {
-            socket: get_socket()?,
-            params: ArtnetDmxPortParams {
-                addr: reply.address,
-                port_address: u16::from_be_bytes(reply.port_address),
-                short_name: null_terminated_string_lossy(&reply.short_name).to_string(),
-                long_name: null_terminated_string_lossy(&reply.long_name).to_string(),
-            },
-            send_buf: vec![],
-        })
-    }
-
-    fn write(&mut self, frame: &[u8]) -> Result<()> {
-        // TODO: the first section of the packet is always the same
-        // we could pre-populate that. Probably not important, its a handful of
-        // bytes at most.
-        self.send_buf.clear();
-        send::write(&mut self.send_buf, self.params.port_address, frame)
-            .context("constructing artnet buffer")?;
-        let dest = SocketAddrV4::new(self.params.addr, PORT);
-        self.socket.send_to(&self.send_buf, dest)?;
-        Ok(())
-    }
-}
-
-#[typetag::serde]
-impl DmxPort for ArtnetDmxPort {
-    /// Poll for artnet devices
-    fn available_ports(wait: Duration) -> Result<PortListing> {
+    /// Poll for artnet devices. Continue polling for the provided timeout.
+    pub fn available_ports(wait: Duration) -> Result<PortListing> {
         let socket = get_socket()?;
 
         let broadcast_addr = ("255.255.255.255", PORT)
@@ -154,6 +126,34 @@ impl DmxPort for ArtnetDmxPort {
         Ok(ports)
     }
 
+    fn from_poll(reply: &PollReply) -> Result<Self> {
+        Ok(Self {
+            socket: get_socket()?,
+            params: ArtnetDmxPortParams {
+                addr: reply.address,
+                port_address: u16::from_be_bytes(reply.port_address),
+                short_name: null_terminated_string_lossy(&reply.short_name).to_string(),
+                long_name: null_terminated_string_lossy(&reply.long_name).to_string(),
+            },
+            send_buf: vec![],
+        })
+    }
+
+    fn write(&mut self, frame: &[u8]) -> Result<()> {
+        // TODO: the first section of the packet is always the same
+        // we could pre-populate that. Probably not important, its a handful of
+        // bytes at most.
+        self.send_buf.clear();
+        send::write(&mut self.send_buf, self.params.port_address, frame)
+            .context("constructing artnet buffer")?;
+        let dest = SocketAddrV4::new(self.params.addr, PORT);
+        self.socket.send_to(&self.send_buf, dest)?;
+        Ok(())
+    }
+}
+
+#[typetag::serde]
+impl DmxPort for ArtnetDmxPort {
     fn open(&mut self) -> Result<(), crate::OpenError> {
         Ok(())
     }
