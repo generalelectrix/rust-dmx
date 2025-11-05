@@ -1,7 +1,7 @@
 //! Implementation of the artnet protocol as a DmxPort.
 use anyhow::{anyhow, Context, Result};
 use artnet_protocol::{ArtCommand, Poll, PollReply};
-use log::{error, warn};
+use log::{debug, error, warn};
 use serde::{Deserialize, Serialize};
 
 use std::{
@@ -49,8 +49,11 @@ impl std::fmt::Display for ArtnetDmxPort {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "ArtNet output {} at {} ({})",
-            self.params.short_name, self.params.addr, self.params.long_name
+            "ArtNet output {} at {} (port {}) ({})",
+            self.params.short_name,
+            self.params.addr,
+            self.params.port_address,
+            self.params.long_name
         )
     }
 }
@@ -142,7 +145,7 @@ impl DmxPort for ArtnetDmxPort {
                 break;
             }
             if let Err(err) = receive_poll(wait - waited_so_far) {
-                error!("Error receiving artnet poll response: {err}.");
+                debug!("Error receiving artnet poll response: {err}.");
             }
         }
         if let Err(err) = socket.set_read_timeout(None) {
