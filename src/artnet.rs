@@ -1,7 +1,7 @@
 //! Implementation of the artnet protocol as a DmxPort.
 use anyhow::{anyhow, Context, Result};
 use artnet_protocol::{ArtCommand, Poll, PollReply};
-use log::{debug, error, warn};
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 
 use std::{
