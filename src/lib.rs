@@ -54,12 +54,23 @@ pub fn available_ports(browse_artnet: Option<Duration>) -> anyhow::Result<PortLi
     Ok(ports)
 }
 
-/// Prompt the user to select a port via the command prompt.
+/// Prompt the user to select a single port via the command prompt.
+///
+/// This is a convenience function for applications that only require a single
+/// port.
 ///
 /// If browse_artnet is Some, poll the network for artnet devices for the provided
 /// wait time. If None, do not search for artnet nodes.
 pub fn select_port(browse_artnet: Option<Duration>) -> anyhow::Result<Box<dyn DmxPort>> {
     let mut ports = available_ports(browse_artnet)?;
+    select_port_from(&mut ports)
+}
+
+/// Prompt the user to select a port via the command prompt.
+///
+/// Select from the provided collection of ports; these can be collected by the
+/// available_ports function.
+pub fn select_port_from(ports: &mut PortListing) -> anyhow::Result<Box<dyn DmxPort>> {
     println!("Available DMX ports:");
     for (i, port) in ports.iter().enumerate() {
         println!("{}: {}", i, port);
