@@ -1,8 +1,11 @@
 # rust-dmx
 
 This library aims to provide a generic trait for a DMX port.
-The library only currently supports the Enttec USB DMX Pro (the original, not
-the 2-universe MkII). It also provides an offline port placeholder.
+It currently supports:
+
+- Enttec DMX USB Pro (and compatible FTDI-based units such as made by DMXKing).
+- ArtNet
+- an offline placeholder
 
 ## Usage
 
