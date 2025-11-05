@@ -95,6 +95,16 @@ pub struct EnttecDmxPort {
 }
 
 impl EnttecDmxPort {
+    /// Return the available enttec ports connected to this system.
+    // TODO: provide a mechanism to specialize this implementation depending on platform.
+    pub fn available_ports() -> anyhow::Result<PortListing> {
+        Ok(serialport::available_ports()?
+            .into_iter()
+            .filter(is_enttec)
+            .map(|info| Box::new(EnttecDmxPort::new(info)) as Box<dyn DmxPort>)
+            .collect())
+    }
+
     /// Create an enttec port.
     /// The port is not opened yet.
     pub fn new(info: SerialPortInfo) -> Self {
@@ -124,16 +134,6 @@ impl EnttecDmxPort {
 
 #[typetag::serde]
 impl DmxPort for EnttecDmxPort {
-    /// Return the available enttec ports connected to this system.
-    /// TODO: provide a mechanism to specialize this implementation depending on platform.
-    fn available_ports() -> anyhow::Result<PortListing> {
-        Ok(serialport::available_ports()?
-            .into_iter()
-            .filter(is_enttec)
-            .map(|info| Box::new(EnttecDmxPort::new(info)) as Box<dyn DmxPort>)
-            .collect())
-    }
-
     /// Open the port.
     fn open(&mut self) -> Result<(), OpenError> {
         if self.port.is_some() {
@@ -277,25 +277,4 @@ pub struct UsbPortInfoDef {
     pub serial_number: Option<String>,
     pub manufacturer: Option<String>,
     pub product: Option<String>,
-}
-
-#[cfg(test)]
-mod test {
-    use std::{thread::sleep, time::Duration};
-
-    use super::*;
-    use std::error::Error;
-
-    #[test]
-    fn test() -> Result<(), Box<dyn Error>> {
-        let mut port = EnttecDmxPort::available_ports()?.pop().unwrap();
-        println!("{}", port);
-        port.open()?;
-        for val in 0..255 {
-            port.write(&[val][..])?;
-            sleep(Duration::from_millis(25));
-        }
-        port.write(&[0][..])?;
-        Ok(())
-    }
 }
