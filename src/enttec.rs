@@ -96,8 +96,8 @@ pub struct EnttecDmxPort {
 
 impl EnttecDmxPort {
     /// Return the available enttec ports connected to this system.
-    /// TODO: provide a mechanism to specialize this implementation depending on platform.
-    pub fn available_ports(_wait: Duration) -> anyhow::Result<PortListing> {
+    // TODO: provide a mechanism to specialize this implementation depending on platform.
+    pub fn available_ports() -> anyhow::Result<PortListing> {
         Ok(serialport::available_ports()?
             .into_iter()
             .filter(is_enttec)
@@ -277,27 +277,4 @@ pub struct UsbPortInfoDef {
     pub serial_number: Option<String>,
     pub manufacturer: Option<String>,
     pub product: Option<String>,
-}
-
-#[cfg(test)]
-mod test {
-    use std::{thread::sleep, time::Duration};
-
-    use super::*;
-    use std::error::Error;
-
-    #[test]
-    fn test() -> Result<(), Box<dyn Error>> {
-        let mut port = EnttecDmxPort::available_ports(Duration::ZERO)?
-            .pop()
-            .unwrap();
-        println!("{}", port);
-        port.open()?;
-        for val in 0..255 {
-            port.write(&[val][..])?;
-            sleep(Duration::from_millis(25));
-        }
-        port.write(&[0][..])?;
-        Ok(())
-    }
 }

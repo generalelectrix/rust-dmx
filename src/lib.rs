@@ -43,7 +43,7 @@ type PortListing = Vec<Box<dyn DmxPort>>;
 /// an offline port is provided directly in the CLI port selection functions.
 pub fn available_ports(browse_artnet: Option<Duration>) -> anyhow::Result<PortListing> {
     let mut ports = Vec::new();
-    ports.extend(EnttecDmxPort::available_ports(Duration::ZERO)?);
+    ports.extend(EnttecDmxPort::available_ports()?);
     if let Some(wait) = browse_artnet {
         ports.extend(ArtnetDmxPort::available_ports(wait)?);
     }
