@@ -15,5 +15,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install pkg-config libudev-dev
       - name: Build the project and run tests
         run: cargo test
