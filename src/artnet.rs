@@ -1,12 +1,12 @@
 //! Implementation of the artnet protocol as a DmxPort.
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use artnet_protocol::{ArtCommand, Output, Poll};
 use log::{error, warn};
 use serde::{Deserialize, Serialize};
 
 use std::{
     net::{Ipv4Addr, SocketAddrV4, ToSocketAddrs, UdpSocket},
-    sync::OnceLock,
+    sync::Mutex,
     time::{Duration, Instant},
 };
 
@@ -50,15 +50,21 @@ impl std::fmt::Display for ArtnetDmxPort {
     }
 }
 
-static ARTNET_SOCKET: OnceLock<UdpSocket> = OnceLock::new();
+// TODO: replace with OnceLock once the fallible init API is stabilized.
+static ARTNET_SOCKET: Mutex<Option<UdpSocket>> = Mutex::new(None);
 
 fn get_socket() -> anyhow::Result<UdpSocket> {
-    ARTNET_SOCKET
-        .get_or_init(|| {
-            UdpSocket::bind(("0.0.0.0", PORT)).expect("failed to bind UDP socket for ArtNet")
-        })
-        .try_clone()
-        .context("cloning ArtNet socket")
+    let mut socket_guard = ARTNET_SOCKET
+        .lock()
+        .map_err(|_| anyhow!("failed to acquire global artnet socket lock"))?;
+    if let Some(s) = socket_guard.as_ref() {
+        return s.try_clone().context("cloning artnet socket");
+    }
+
+    let s = UdpSocket::bind(("0.0.0.0", PORT)).context("failed to bind UDP socket for artnet")?;
+    let cloned = s.try_clone().context("cloning artnet socket")?;
+    *socket_guard = Some(s);
+    Ok(cloned)
 }
 
 impl ArtnetDmxPort {
