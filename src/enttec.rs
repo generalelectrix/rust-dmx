@@ -174,11 +174,11 @@ impl DmxPort for EnttecDmxPort {
         // Quick profiling shows that a disconnected port only takes about
         // 100us to poll and fail, so this is acceptable to do inside an
         // application's render loop.
-        if self.port.is_none() {
-            if let Err(err) = self.open() {
-                debug!("Failed to reopen DMX port {}: {:#?}.", self, err);
-                return Err(WriteError::Disconnected);
-            }
+        if self.port.is_none()
+            && let Err(err) = self.open()
+        {
+            debug!("Failed to reopen DMX port {}: {:#?}.", self, err);
+            return Err(WriteError::Disconnected);
         }
         let port = self.port.as_mut().ok_or(WriteError::Disconnected)?;
         let size = frame.len();
@@ -204,10 +204,10 @@ impl DmxPort for EnttecDmxPort {
 
 impl fmt::Display for EnttecDmxPort {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let SerialPortType::UsbPort(p) = &self.info.port_type {
-            if let Some(sn) = &p.serial_number {
-                return write!(f, "Enttec DMX USB PRO {}", sn);
-            }
+        if let SerialPortType::UsbPort(p) = &self.info.port_type
+            && let Some(sn) = &p.serial_number
+        {
+            return write!(f, "Enttec DMX USB PRO {}", sn);
         }
         write!(f, "Enttec DMX USB PRO {}", self.info.port_name)
     }

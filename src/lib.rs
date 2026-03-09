@@ -10,12 +10,12 @@ mod offline;
 
 pub use artnet::ArtnetDmxPort;
 pub use enttec::EnttecDmxPort;
-pub use offline::{offline, OfflineDmxPort};
+pub use offline::{OfflineDmxPort, offline};
 
 /// Trait for the general notion of a DMX port.
 /// This enables creation of an "offline" port to slot into place if an API requires an output.
 #[typetag::serde(tag = "type")]
-pub trait DmxPort: fmt::Display {
+pub trait DmxPort: fmt::Display + Send {
     /// Open the port for writing.  Implementations should no-op if this is
     /// called twice rather than returning an error.  Primarily used to re-open
     /// a port that has be deserialized.

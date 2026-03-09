@@ -1,5 +1,5 @@
 //! Implementation of the artnet protocol as a DmxPort.
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use artnet_protocol::{ArtCommand, Poll, PollReply};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
@@ -181,7 +181,7 @@ mod send {
 
     //! This little module implements just the code we need to write an artnet
     //! DMX packet, with no allocations.
-    use anyhow::{ensure, Result};
+    use anyhow::{Result, ensure};
 
     use std::io::Write;
 
@@ -211,7 +211,7 @@ mod send {
         write_u8(&mut w, 0)?;
         // Destination port number.
         w.write_all(&arnet_port_address.to_le_bytes())?;
-        let add_pad_byte = buf.len() % 2 != 0;
+        let add_pad_byte = !buf.len().is_multiple_of(2);
         // Data payload length, rounded up to be a multiple of 2.
         let padded_len = buf.len() as u16 + add_pad_byte as u16;
         w.write_all(&padded_len.to_be_bytes())?;
