@@ -24,9 +24,11 @@ pub trait DmxPort: fmt::Display + Send {
     /// Close the port.
     fn close(&mut self);
 
-    /// Return true if this port supports setting a frame rate.
-    fn can_set_framerate(&self) -> bool {
-        false
+    /// Return Some with the current framerate if this port has its own clock.
+    ///
+    /// Return None if this port doesn't support setting the framerate.
+    fn get_framerate(&self) -> Option<u8> {
+        None
     }
 
     /// Set an output framerate for this port.

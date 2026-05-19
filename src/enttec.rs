@@ -169,8 +169,8 @@ impl DmxPort for EnttecDmxPort {
         self.port = None;
     }
 
-    fn can_set_framerate(&self) -> bool {
-        true
+    fn get_framerate(&self) -> Option<u8> {
+        Some(self.params.output_rate)
     }
 
     fn set_framerate(&mut self, fps: u8) -> Result<(), SetFpsError> {
