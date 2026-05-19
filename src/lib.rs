@@ -24,6 +24,19 @@ pub trait DmxPort: fmt::Display + Send {
     /// Close the port.
     fn close(&mut self);
 
+    /// Return true if this port supports setting a frame rate.
+    fn can_set_framerate(&self) -> bool {
+        false
+    }
+
+    /// Set an output framerate for this port.
+    ///
+    /// Not all ports support this - ports that don't have an independent
+    /// framerate should return an error.
+    fn set_framerate(&mut self, _fps: u8) -> Result<(), SetFpsError> {
+        Err(SetFpsError::Unsupported)
+    }
+
     /// Write a DMX frame out to the port.  If the frame is smaller than the minimum universe size,
     /// it will be padded with zeros.  If the frame is larger than the maximum universe size, the
     /// values beyond the max size will be ignored.
@@ -116,6 +129,16 @@ pub enum OpenError {
 pub enum WriteError {
     #[error("the DMX port is not connected")]
     Disconnected,
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+#[derive(Error, Debug)]
+pub enum SetFpsError {
+    #[error("this port does not support setting framerate")]
+    Unsupported,
+    #[error("framerate {v} out of range (min: {min}, max: {max})")]
+    OutOfRange { v: u8, min: u8, max: u8 },
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

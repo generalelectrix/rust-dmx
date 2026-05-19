@@ -6,7 +6,7 @@ use std::time::Duration;
 use std::{cmp::min, fmt};
 use thiserror::Error;
 
-use crate::{OpenError, PortListing, WriteError};
+use crate::{OpenError, PortListing, SetFpsError, WriteError};
 
 use super::DmxPort;
 use serialport::{SerialPort, SerialPortInfo, SerialPortType, UsbPortInfo};
@@ -167,6 +167,28 @@ impl DmxPort for EnttecDmxPort {
 
     fn close(&mut self) {
         self.port = None;
+    }
+
+    fn can_set_framerate(&self) -> bool {
+        true
+    }
+
+    fn set_framerate(&mut self, fps: u8) -> Result<(), SetFpsError> {
+        if !(1..=40).contains(&fps) {
+            return Err(SetFpsError::OutOfRange {
+                v: fps,
+                min: 1,
+                max: 40,
+            });
+        }
+        let original = self.params.output_rate;
+        self.params.output_rate = fps;
+        if let Err(err) = self.write_params() {
+            self.params.output_rate = original;
+            Err(SetFpsError::Other(err.into()))
+        } else {
+            Ok(())
+        }
     }
 
     fn write(&mut self, frame: &[u8]) -> Result<(), WriteError> {
