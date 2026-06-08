@@ -49,7 +49,7 @@ impl std::fmt::Display for ArtnetDmxPort {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "ArtNet output {} at {} (port {}) ({})",
+            "ArtNet {} at {} universe {} ({})",
             self.params.short_name,
             self.params.addr,
             self.params.port_address,
@@ -97,7 +97,10 @@ impl ArtnetDmxPort {
 
         let start = Instant::now();
 
-        let mut ports = vec![];
+        // Collected across every reply, including the separate replies that a
+        // multi-port node pages its ports across (Art-Net "BindIndex" paging),
+        // so a gateway with more than four outputs is fully enumerated.
+        let mut ports: Vec<Self> = vec![];
 
         let mut receive_poll = |timeout| -> anyhow::Result<()> {
             socket.set_read_timeout(Some(timeout))?;
@@ -106,7 +109,7 @@ impl ArtnetDmxPort {
             let command = ArtCommand::from_buffer(&buffer[..length])?;
 
             if let ArtCommand::PollReply(reply) = command {
-                ports.push(Box::new(Self::from_poll(&reply)?) as Box<dyn DmxPort>);
+                ports.extend(Self::ports_from_poll(&reply)?);
             }
             Ok(())
         };
@@ -123,20 +126,49 @@ impl ArtnetDmxPort {
         if let Err(err) = socket.set_read_timeout(None) {
             warn!("Error disabling ArtNet socket timeout: {err}");
         }
-        Ok(ports)
+
+        let listing = Self::sorted_unique(ports)
+            .into_iter()
+            .map(|p| Box::new(p) as Box<dyn DmxPort>)
+            .collect();
+        Ok(listing)
     }
 
-    fn from_poll(reply: &PollReply) -> Result<Self> {
-        Ok(Self {
-            socket: get_socket()?,
-            params: ArtnetDmxPortParams {
-                addr: reply.address,
-                port_address: u16::from_be_bytes(reply.port_address),
-                short_name: null_terminated_string_lossy(&reply.short_name).to_string(),
-                long_name: null_terminated_string_lossy(&reply.long_name).to_string(),
-            },
-            send_buf: vec![],
-        })
+    /// Order ports by destination - node address then universe - and keep one
+    /// port per distinct destination.
+    ///
+    /// Replies arrive in nondeterministic order and a node answers a poll more
+    /// than once, so an unprocessed listing is neither stable nor unique.
+    fn sorted_unique(mut ports: Vec<Self>) -> Vec<Self> {
+        ports.sort_by_key(|p| (p.params.addr, p.params.port_address));
+        ports.dedup_by_key(|p| (p.params.addr, p.params.port_address));
+        ports
+    }
+
+    /// One port for each DMX output a node advertises in a poll reply.
+    ///
+    /// A node marks which of its (up to four) ports are outputs with the output
+    /// bit of each `port_types` entry, and gives the universe each output
+    /// listens on in the matching `swout` entry.
+    fn ports_from_poll(reply: &PollReply) -> Result<Vec<Self>> {
+        let mut ports = Vec::new();
+        for i in 0..4 {
+            // Bit 7 of a port type set means the port can output DMX from Art-Net.
+            if reply.port_types[i] & 0x80 == 0 {
+                continue;
+            }
+            ports.push(Self {
+                socket: get_socket()?,
+                params: ArtnetDmxPortParams {
+                    addr: reply.address,
+                    port_address: output_port_address(reply, i),
+                    short_name: null_terminated_string_lossy(&reply.short_name).to_string(),
+                    long_name: null_terminated_string_lossy(&reply.long_name).to_string(),
+                },
+                send_buf: vec![],
+            });
+        }
+        Ok(ports)
     }
 
     fn write(&mut self, frame: &[u8]) -> Result<()> {
@@ -164,6 +196,18 @@ impl DmxPort for ArtnetDmxPort {
         self.write(frame)?;
         Ok(())
     }
+}
+
+/// The 15-bit Art-Net Port-Address of one of a node's output ports.
+///
+/// Net (bits 14-8) and Sub-Net (bits 7-4) are shared by the whole node and
+/// carried in `port_address`; the Universe (bits 3-0) is per output port and
+/// carried in the matching `swout` entry.
+fn output_port_address(reply: &PollReply, output_index: usize) -> u16 {
+    let net = (reply.port_address[0] & 0x7F) as u16;
+    let sub_net = (reply.port_address[1] & 0x0F) as u16;
+    let universe = (reply.swout[output_index] & 0x0F) as u16;
+    (net << 8) | (sub_net << 4) | universe
 }
 
 fn null_terminated_string_lossy(bytes: &[u8]) -> String {
@@ -258,5 +302,92 @@ mod send {
             .unwrap();
             assert_eq!(library, custom);
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use artnet_protocol::PollReply;
+
+    /// The 15-bit universe each enumerated output port targets, in order.
+    fn universes(reply: &PollReply) -> Vec<u16> {
+        ArtnetDmxPort::ports_from_poll(reply)
+            .unwrap()
+            .iter()
+            .map(|p| p.params.port_address)
+            .collect()
+    }
+
+    #[test]
+    fn enumerates_advertised_output_universes() {
+        // Two outputs on net 0 / sub-net 0 listening on universes 1 and 2.
+        let reply = PollReply {
+            port_types: [0x80, 0x80, 0, 0],
+            swout: [1, 2, 0, 0],
+            ..Default::default()
+        };
+        assert_eq!(universes(&reply), vec![1, 2]);
+
+        // The net and sub-net switches occupy the high bits of the universe:
+        // net in bits 14-8, sub-net in bits 7-4, the swout nibble in bits 3-0.
+        let reply = PollReply {
+            port_address: [0x01, 0x02], // NetSwitch 1, SubSwitch 2
+            port_types: [0x80, 0, 0, 0],
+            swout: [3, 0, 0, 0],
+            ..Default::default()
+        };
+        assert_eq!(universes(&reply), vec![(1 << 8) | (2 << 4) | 3]);
+    }
+
+    #[test]
+    fn skips_non_output_ports() {
+        // Port 0 is input-only and skipped; ports 1 (in+out) and 2 (out) are kept.
+        let reply = PollReply {
+            port_types: [0x40, 0xC0, 0x80, 0x00],
+            swout: [9, 5, 6, 7],
+            ..Default::default()
+        };
+        assert_eq!(universes(&reply), vec![5, 6]);
+    }
+
+    #[test]
+    fn sorts_and_dedupes_destinations_across_replies() {
+        let page = |addr: [u8; 4], sub_net: u8, swout: [u8; 4]| PollReply {
+            address: addr.into(),
+            port_address: [0, sub_net],
+            port_types: [0x80, 0x80, 0, 0],
+            swout,
+            ..Default::default()
+        };
+        let lo = [10, 0, 0, 5];
+        let hi = [10, 0, 0, 7];
+        // Replies land out of order: a higher node first, a node paging its
+        // outputs across two sub-nets, and a re-sent page. The result is sorted
+        // by node then universe, with each destination appearing once.
+        let ports = [
+            page(hi, 0, [4, 3, 0, 0]),
+            page(lo, 1, [2, 1, 0, 0]),
+            page(lo, 0, [2, 1, 0, 0]),
+            page(lo, 1, [2, 1, 0, 0]),
+        ]
+        .iter()
+        .flat_map(|r| ArtnetDmxPort::ports_from_poll(r).unwrap())
+        .collect();
+        let destinations: Vec<(Ipv4Addr, u16)> = ArtnetDmxPort::sorted_unique(ports)
+            .iter()
+            .map(|p| (p.params.addr, p.params.port_address))
+            .collect();
+        assert_eq!(
+            destinations,
+            vec![
+                (lo.into(), 1),
+                (lo.into(), 2),
+                (lo.into(), (1 << 4) | 1),
+                (lo.into(), (1 << 4) | 2),
+                (hi.into(), 3),
+                (hi.into(), 4),
+            ]
+        );
     }
 }
