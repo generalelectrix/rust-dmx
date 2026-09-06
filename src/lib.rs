@@ -6,10 +6,13 @@ use thiserror::Error;
 
 mod artnet;
 mod enttec;
+mod node;
 mod offline;
 
 pub use artnet::ArtnetDmxPort;
+pub use artnet_protocol::PortAddress;
 pub use enttec::EnttecDmxPort;
+pub use node::{ArtnetNode, ArtnetNodeConfig, first_available_port};
 pub use offline::{OfflineDmxPort, offline};
 
 /// Trait for the general notion of a DMX port.

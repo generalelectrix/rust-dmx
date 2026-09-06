@@ -12,7 +12,7 @@ use std::{
 
 use crate::{DmxPort, PortListing};
 
-const PORT: u16 = 6454;
+pub(crate) const PORT: u16 = 6454;
 
 #[derive(Serialize, Deserialize)]
 #[serde(try_from = "ArtnetDmxPortParams")]
@@ -61,7 +61,7 @@ impl std::fmt::Display for ArtnetDmxPort {
 // TODO: replace with OnceLock once the fallible init API is stabilized.
 static ARTNET_SOCKET: Mutex<Option<UdpSocket>> = Mutex::new(None);
 
-fn get_socket() -> anyhow::Result<UdpSocket> {
+pub(crate) fn get_socket() -> anyhow::Result<UdpSocket> {
     let mut socket_guard = ARTNET_SOCKET
         .lock()
         .map_err(|_| anyhow!("failed to acquire global artnet socket lock"))?;
@@ -150,7 +150,7 @@ impl ArtnetDmxPort {
     /// A node marks which of its (up to four) ports are outputs with the output
     /// bit of each `port_types` entry, and gives the universe each output
     /// listens on in the matching `swout` entry.
-    fn ports_from_poll(reply: &PollReply) -> Result<Vec<Self>> {
+    pub(crate) fn ports_from_poll(reply: &PollReply) -> Result<Vec<Self>> {
         let mut ports = Vec::new();
         for i in 0..4 {
             // Bit 7 of a port type set means the port can output DMX from Art-Net.
@@ -203,14 +203,14 @@ impl DmxPort for ArtnetDmxPort {
 /// Net (bits 14-8) and Sub-Net (bits 7-4) are shared by the whole node and
 /// carried in `port_address`; the Universe (bits 3-0) is per output port and
 /// carried in the matching `swout` entry.
-fn output_port_address(reply: &PollReply, output_index: usize) -> u16 {
+pub(crate) fn output_port_address(reply: &PollReply, output_index: usize) -> u16 {
     let net = (reply.port_address[0] & 0x7F) as u16;
     let sub_net = (reply.port_address[1] & 0x0F) as u16;
     let universe = (reply.swout[output_index] & 0x0F) as u16;
     (net << 8) | (sub_net << 4) | universe
 }
 
-fn null_terminated_string_lossy(bytes: &[u8]) -> String {
+pub(crate) fn null_terminated_string_lossy(bytes: &[u8]) -> String {
     let null_pos = bytes
         .iter()
         .position(|c| *c == b'\0')
